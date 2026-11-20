@@ -46,3 +46,20 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Python / backend
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Firebase / secrets
+*service-account*.json
+google-services.json
+GoogleService-Info.plist
