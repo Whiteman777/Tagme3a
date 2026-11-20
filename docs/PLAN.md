@@ -159,50 +159,51 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 
 - Restructure to monorepo, scaffold `backend/`, docker-compose (pg+pgvector, redis, meili).
 - Backend config/session/logging, Alembic baseline, health endpoint, ruff/mypy/pytest, Dockerfile.
-- Flutter: feature-first folders, Riverpod, go_router, theme, i18n/RTL, dio, lint, app shell.
-- CI: backend lint+test, flutter analyze+test.
-- **Exit:** `docker compose up` serves `/health`; app boots with AR RTL shell.
+- CI: backend lint + test (Flutter CI is owned by the separate client workstream).
+- **Exit:** `docker compose up` serves `/health` and `/ready`.
+
+> The Flutter client is handled by a different workstream; milestones below list
+> backend deliverables only.
 
 ### M1 — Catalog + Auth
 
 - Models `products/offers/price_history/merchants/users`; migrations.
-- Auth (JWT access/refresh, roles).
-- Meilisearch indexing + search endpoints; product CRUD (admin).
-- Flutter: search, browse, detail, auth flow.
-- **Exit:** search a seeded catalog, open detail, log in.
+- Firebase ID-token verification with Postgres-owned profile/roles (credentials stay in Firebase).
+- Meilisearch indexing + search endpoints; product CRUD (admin); best-offer ranking.
+- **Exit:** seeded catalog is searchable, product detail returns ranked offers, and
+  `/auth/sync` + `/auth/me` work with a verified Firebase token.
 
 ### M2 — Scraping MVP
 
 - `BaseScraper` + **Sigma** and **Compumarts** adapters; raw→staging.
 - arq worker + cron; price history; ghost-inventory marking.
 - Admin review queue (basic).
-- **Exit:** daily prices flowing for 2 merchants; history visible in app.
+- **Exit:** daily prices flowing for 2 merchants; price history available via API.
 
 ### M3 — Normalization & Matcher
 
 - Canonical schema hardening, alias tables, rapidfuzz + pgvector matching,
-  confidence thresholds, review UI.
+  confidence thresholds, admin review queue API.
 - **Exit:** ≥90% auto-match on target merchants; low-confidence queued.
 
 ### M4 — PC Builder
 
 - Component data seed (CPU/GPU/board/RAM/PSU/case/cooler/storage + compat matrix).
 - `compatibility.py` + `/builder/validate`; budget optimizer (`/builder/optimize`).
-- Flutter builder UI with live compat warnings; saved builds.
-- **Exit:** build a compatible PC within budget in-app.
+- Saved builds API.
+- **Exit:** `/builder/validate` and `/builder/optimize` return compatible builds within budget.
 
 ### M5 — Laptop Recommender
 
 - Scoring weights per use-case (gaming/engineering/editing/3D/student) + budget tiers.
-- `/laptops/recommend` + Flutter screen.
-- **Exit:** recommendations ranked and explained.
+- `/laptops/recommend` API.
+- **Exit:** recommendations ranked and explained via API.
 
 ### M6 — Alerts & Release Polish
 
-- FCM price-drop alerts end-to-end; offline cache/stale badges; analytics;
-  empty/error states; performance pass.
-- Internal testing → Play Store internal track.
-- **Exit:** installable build with alerts live.
+- FCM device-token registration and price-drop alert delivery from the backend.
+- API support for stale/offline badges and analytics events; performance pass.
+- **Exit:** price-drop alerts are emitted and delivered via FCM.
 
 ---
 
