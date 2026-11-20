@@ -1,30 +1,50 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:tagme3a/main.dart';
+import 'package:tagme3a/app/app.dart';
+import 'package:tagme3a/core/di/app_dependencies.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('boots into the Arabic home feed and navigates to the builder', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(Tagme3aApp(dependencies: AppDependencies.mock()));
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('صباح الخير، مصطفى'), findsOneWidget);
+    expect(find.text('الرئيسية'), findsOneWidget);
+    expect(find.text('ابدأ التجميعة الآن'), findsOneWidget);
+
+    await tester.tap(find.text('جمّع جهازك').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('تجميعتك الحالية'), findsOneWidget);
+    expect(find.text('تنبيه مقترح من فريق تجميعة'), findsOneWidget);
+    expect(find.textContaining('ترقية المزود'), findsOneWidget);
+    expect(find.text('94%'), findsWidgets);
+  });
+
+  testWidgets('opens the store tab and filters to laptops', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(Tagme3aApp(dependencies: AppDependencies.mock()));
+    await tester.pump(const Duration(milliseconds: 1800));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المتجر'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('المتجر'), findsWidgets);
+    expect(find.text('12 منتج'), findsOneWidget);
+
+    await tester.tap(find.text('كروت الشاشة').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 منتج'), findsOneWidget);
   });
 }
