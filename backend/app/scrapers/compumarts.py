@@ -5,6 +5,7 @@ uses a dedicated bot User-Agent instead of a browser impersonation UA. It only
 reads public collection HTML; cart/checkout and AJAX surfaces are off-limits.
 """
 
+from decimal import Decimal
 from urllib.parse import urljoin, urlparse
 
 from selectolax.lexbor import LexborHTMLParser
@@ -22,6 +23,7 @@ from app.scrapers.base import (
 class CompumartsScraper(BaseScraper):
     key = "compumarts"
     base_url = "https://www.compumarts.com"
+    min_price_egp = Decimal("100")
     listings_url = f"{base_url}/collections/pc-parts-proccesor"
     user_agents = ("Tagme3aPriceBot/1.0 (+https://github.com/Whiteman777/Tagme3a)",)
 
@@ -73,7 +75,7 @@ class CompumartsScraper(BaseScraper):
 
             title = title_node.text(strip=True)
             price = parse_price_egp(price_node.text(strip=True))
-            if not title or price is None:
+            if not title or price is None or price < self.min_price_egp:
                 continue
 
             href = title_node.attributes.get("href", "")

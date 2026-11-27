@@ -114,6 +114,13 @@ def test_compumarts_gpu_real_fixture_parses_prices() -> None:
     assert listings[0].in_stock is False
 
 
+def test_compumarts_skips_placeholder_prices() -> None:
+    html = (FIXTURES / "compumarts_placeholder_price_real.html").read_text(encoding="utf-8")
+    scraper = CompumartsScraper(delay=0)
+
+    assert scraper.parse(html, url=scraper.listings_url) == []
+
+
 def test_compumarts_uses_identifying_agent_and_public_collections() -> None:
     scraper = CompumartsScraper()
 

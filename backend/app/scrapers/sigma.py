@@ -6,6 +6,7 @@ container that shows ``Out Of Stock`` when needed. Parsing those cards keeps the
 adapter independent of the site's internal API (which robots.txt disallows).
 """
 
+from decimal import Decimal
 from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
 
 from selectolax.lexbor import LexborHTMLParser
@@ -24,6 +25,7 @@ from app.scrapers.base import (
 class SigmaScraper(BaseScraper):
     key = "sigma"
     base_url = "https://sigma-computer.com"
+    min_price_egp = Decimal("100")
     listings_url = f"{base_url}/en/category/9f5039de-5c80-46f3-9fe4-6e8f94189b8c"  # Laptops
 
     # Public, robots-allowed searches that surface components (the category
@@ -93,7 +95,7 @@ class SigmaScraper(BaseScraper):
             if price_node is None:
                 continue
             price = parse_price_egp(price_node.text(strip=True))
-            if price is None:
+            if price is None or price < self.min_price_egp:
                 continue
 
             title = anchor.attributes.get("title") or anchor.text(strip=True)

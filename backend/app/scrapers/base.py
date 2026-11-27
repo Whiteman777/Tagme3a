@@ -148,6 +148,7 @@ class BaseScraper(ABC):
     base_url: str = ""
     listings_url: str = ""
     user_agents: tuple[str, ...] = ()
+    min_price_egp: Decimal = Decimal("1")
 
     def __init__(
         self,
