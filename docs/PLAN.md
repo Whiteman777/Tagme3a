@@ -190,8 +190,8 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > (ToS bans automated price collection) and replaced by 2B; the parked
 > `elnekhely.com` seed was retargeted to `elnekhelytechnology.com`. Client-side
 > Web Bot Auth (RFC 9421) signing is implemented and tested but stays disabled
-> until the Compumarts owner publishes the HTTPS JWK directory and supplies keys;
-> see `backend/COMPLIANCE.md`. Cron enqueue firing is covered by a fake-pool test;
+> until the Compumarts owner publishes the HTTPS JWK directory and supplies keys.
+> Cron enqueue firing is covered by a fake-pool test;
 > a live Redis observation recipe is in `backend/M2.md`.
 
 ### M3 — Normalization & Matcher
@@ -241,8 +241,7 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 - Every price carries `captured_at` + `source`; UI never presents stale as live.
 - Raw snapshots retained (audit / reparse after store HTML changes).
 - One merchant = one adapter = one health metric (scrapers break often).
-- Confidence-gated auto-matching + human review; **legal review before scraping any store**
-  and prefer commercial data agreements.
+- Confidence-gated auto-matching + human review; robots-checked public category HTML only.
 
 ## 5a. AI-assisted AR/EN phrasing (single model use)
 

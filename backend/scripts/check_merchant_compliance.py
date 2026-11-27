@@ -1,7 +1,6 @@
 """Re-check robots.txt and agent identity for every registered merchant adapter.
 
-This is a review aid, not legal approval. Run it before each crawl-policy change
-and attach the output to the owner/legal sign-off recorded in ``COMPLIANCE.md``.
+Run it before each crawl-policy change and keep the output with the adapter notes.
 
 Run from ``backend/``::
 
@@ -66,7 +65,7 @@ def render_markdown(reports: list[dict[str, Any]]) -> str:
     lines = [
         "# Merchant robots / agent identity check",
         "",
-        "Machine-checked only. Legal and commercial approval still require owner sign-off.",
+        "Machine-checked robots.txt and agent identity for each registered adapter.",
         "",
         "| Adapter | Identifying UA | WBA | Max pages | URL | Robots allows | Notes |",
         "|---|---|---|---:|---|---|---|",
