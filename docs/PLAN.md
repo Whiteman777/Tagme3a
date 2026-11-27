@@ -197,13 +197,14 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 
 > **Status (2026-11-27):** implemented on `backend` (runbook: `backend/M3.md`).
 > Normalization, model-identity/capacity/brand/bundle hard gates, rapidfuzz
- > scoring, reviewer-learned aliases, low-confidence suggestions and reviewer-role
- > enforcement are in place; health and manual scrape remain admin-only. Migration
- > `0003` adds aliases and suggestions plus opportunistic pgvector embedding
- > storage. Live smoke showed 14/14 audited auto-matches correct; the raw rate on
- > broad merchant pages is lower because the 15-SKU development catalog does not
- > cover most listed products. Full-docker pgvector, Web Bot Auth, Firebase and
- > Meilisearch verification remain pending.
+> scoring, reviewer-learned aliases, low-confidence suggestions and reviewer-role
+> enforcement are in place; health and manual scrape remain admin-only. Migration
+> `0003` adds aliases and suggestions plus opportunistic pgvector embedding
+> storage. Live smoke showed 14/14 audited auto-matches correct; the raw rate on
+> broad merchant pages is lower because the 15-SKU development catalog does not
+> cover most listed products. Full Docker stack verified pgvector, Meilisearch
+> indexing and on-demand arq execution; Web Bot Auth and real Firebase token
+> verification remain pending.
 
 ### M4 — PC Builder
 
