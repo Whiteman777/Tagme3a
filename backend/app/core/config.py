@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     SCRAPE_CRON_MINUTE: int = 0
     RECOMPUTE_CRON_MINUTE: int = 30
 
+    # Web Bot Auth (RFC 9421) for merchants that require signed agent traffic.
+    # Disabled unless both the HTTPS agent directory URL and private key are set.
+    WEB_BOT_AUTH_AGENT_URL: str = ""
+    WEB_BOT_AUTH_PRIVATE_KEY: str = ""  # PEM content or path to a PEM file
+    WEB_BOT_AUTH_KEY_ID: str = ""  # optional; derived from the JWK thumbprint
+    WEB_BOT_AUTH_EXPIRES_SECONDS: int = 300
+
     # Scraper monitoring. Alerts are always logged; the webhook is optional.
     SCRAPER_ALERT_WEBHOOK_URL: str = ""
     SCRAPER_ALERT_FAILURE_LIMIT: int = 2

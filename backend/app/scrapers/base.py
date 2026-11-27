@@ -17,6 +17,7 @@ import httpx
 from selectolax.lexbor import LexborHTMLParser
 
 from app.core.logging import logger
+from app.scrapers.web_bot_auth import WebBotAuthSigner, request_headers
 
 DEFAULT_USER_AGENTS: tuple[str, ...] = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36",
@@ -160,6 +161,9 @@ class BaseScraper(ABC):
     # unbounded crawl. Adapters override this when their real pages justify it.
     max_pages: int = 1
     max_retry_delay_seconds: float = 60.0
+    # Adapters that require Web Bot Auth opt in; signing is only active when the
+    # operator has supplied a valid HTTPS directory URL and private key.
+    web_bot_auth: bool = False
 
     def __init__(
         self,
@@ -179,6 +183,15 @@ class BaseScraper(ABC):
         self._client = client
         self._last_request: dict[str, datetime] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
+        self._web_auth: WebBotAuthSigner | None = (
+            WebBotAuthSigner.from_settings() if self.web_bot_auth else None
+        )
+
+    def _headers(self, url: str, client: httpx.AsyncClient) -> dict[str, str]:
+        """Build a GET header set, signing it when this adapter requires it."""
+        user_agent = next(self._agents)
+        request = client.build_request("GET", url, headers={"User-Agent": user_agent})
+        return request_headers(request, user_agent=user_agent, signer=self._web_auth)
 
     def listing_urls(self) -> list[str]:
         """Public seed pages to scrape for this merchant (one by default)."""
@@ -238,7 +251,11 @@ class BaseScraper(ABC):
             parser: RobotFileParser | None = RobotFileParser()
             parser.set_url(f"{origin}/robots.txt")
             try:
-                response = await client.get(f"{origin}/robots.txt", timeout=5.0)
+                response = await client.get(
+                    f"{origin}/robots.txt",
+                    headers=self._headers(f"{origin}/robots.txt", client),
+                    timeout=5.0,
+                )
                 if response.status_code == 200:
                     parser.parse(response.text.splitlines())
                 else:
@@ -261,7 +278,7 @@ class BaseScraper(ABC):
         throttled = 0
         for attempt in range(self.max_retries + 1):
             try:
-                response = await client.get(url, headers={"User-Agent": next(self._agents)})
+                response = await client.get(url, headers=self._headers(url, client))
                 # agents.md asks bots to back off on 429 and honor Retry-After.
                 if response.status_code in (429, 503):
                     throttled += 1

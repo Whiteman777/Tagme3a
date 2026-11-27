@@ -1,6 +1,7 @@
 """Firebase ID token verification and role-based authorization dependencies."""
 
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,14 @@ def _get_firebase_app() -> firebase_admin.App:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Firebase is not configured on this server.",
         )
+
+    # The Auth emulator accepts unsigned tokens and needs no service account.
+    if os.getenv("FIREBASE_AUTH_EMULATOR_HOST"):
+        _firebase_app = firebase_admin.initialize_app(
+            None, {"projectId": settings.FIREBASE_PROJECT_ID}
+        )
+        logger.info("firebase_emulator_connected", project=settings.FIREBASE_PROJECT_ID)
+        return _firebase_app
 
     raw = settings.FIREBASE_CREDENTIALS.strip()
     if raw.startswith("{"):

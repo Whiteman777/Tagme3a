@@ -152,6 +152,27 @@ async def evaluate_scraper_health(
     return result
 
 
+async def post_alert_payload(
+    payload: dict[str, Any], *, client: httpx.AsyncClient | None = None
+) -> bool:
+    """POST an alert payload to the configured webhook; never fail the caller."""
+    if not settings.SCRAPER_ALERT_WEBHOOK_URL:
+        return False
+
+    own_client = client is None
+    http = client or httpx.AsyncClient(timeout=5.0)
+    try:
+        response = await http.post(settings.SCRAPER_ALERT_WEBHOOK_URL, json=payload)
+        response.raise_for_status()
+        return True
+    except httpx.HTTPError as exc:
+        logger.error("scraper_alert_webhook_failed", error=str(exc))
+        return False
+    finally:
+        if own_client:
+            await http.aclose()
+
+
 async def emit_alerts(
     by_merchant: dict[str, list[ScraperAlert]], *, client: httpx.AsyncClient | None = None
 ) -> int:
@@ -165,20 +186,11 @@ async def emit_alerts(
             severity=alert.severity,
             message=alert.message,
         )
-    if not alerts or not settings.SCRAPER_ALERT_WEBHOOK_URL:
-        return len(alerts)
+    if not alerts:
+        return 0
 
     payload: dict[str, Any] = {
         "alerts": [alert.model_dump(mode="json") for alert in alerts],
     }
-    own_client = client is None
-    http = client or httpx.AsyncClient(timeout=5.0)
-    try:
-        response = await http.post(settings.SCRAPER_ALERT_WEBHOOK_URL, json=payload)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.error("scraper_alert_webhook_failed", error=str(exc))
-    finally:
-        if own_client:
-            await http.aclose()
+    await post_alert_payload(payload, client=client)
     return len(alerts)

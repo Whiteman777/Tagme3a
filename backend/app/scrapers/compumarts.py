@@ -26,6 +26,8 @@ class CompumartsScraper(BaseScraper):
     min_price_egp = Decimal("100")
     listings_url = f"{base_url}/collections/pc-parts-proccesor"
     user_agents = ("Tagme3aPriceBot/1.0 (+https://github.com/Whiteman777/Tagme3a)",)
+    # Signed Web Bot Auth headers are added only when the operator supplies keys.
+    web_bot_auth = True
 
     collection_handles: tuple[str, ...] = (
         "pc-parts-proccesor",
