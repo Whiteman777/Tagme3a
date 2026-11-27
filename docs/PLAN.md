@@ -211,8 +211,9 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > verified pgvector, Meilisearch indexing and on-demand arq execution. Real
 > Firebase verification passed against both the Auth emulator and the live
 > `tagme3a` project via the real verifier (`backend/M3.md`).
-> SKU-curation reporting is in `backend/SKU_CURATION.md`, and alert webhook
-> wiring guidance is in `backend/OPS_WEBHOOKS.md`.
+> SKU-curation reporting and the reviewed-CSV importer are in
+> `backend/SKU_CURATION.md`, and alert webhook wiring guidance is in
+> `backend/OPS_WEBHOOKS.md`.
 
 ### M4 — PC Builder
 
