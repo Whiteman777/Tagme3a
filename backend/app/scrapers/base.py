@@ -86,6 +86,7 @@ class FetchResult:
     status_code: int
     checksum: str
     fetched_at: datetime
+    throttled_responses: int = 0
 
 
 @dataclass(frozen=True)
@@ -257,10 +258,13 @@ class BaseScraper(ABC):
             raise PermissionError(f"robots.txt disallows {url}")
 
         last_error: Exception | None = None
+        throttled = 0
         for attempt in range(self.max_retries + 1):
             try:
                 response = await client.get(url, headers={"User-Agent": next(self._agents)})
                 # agents.md asks bots to back off on 429 and honor Retry-After.
+                if response.status_code in (429, 503):
+                    throttled += 1
                 if response.status_code in (429, 503) and attempt < self.max_retries:
                     delay = self.retry_after_seconds(response.headers.get("Retry-After"))
                     if delay is None:
@@ -278,6 +282,7 @@ class BaseScraper(ABC):
                     status_code=response.status_code,
                     checksum=hashlib.sha256(response.content).hexdigest(),
                     fetched_at=datetime.now(UTC),
+                    throttled_responses=throttled,
                 )
             except httpx.HTTPError as exc:
                 last_error = exc

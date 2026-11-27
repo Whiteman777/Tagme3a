@@ -84,6 +84,9 @@ async def run_merchant(
     total_found = 0
     total_matched = 0
     snapshots_new = 0
+    throttled_responses = 0
+    fetch_failures = 0
+    parse_failures = 0
     failures: list[str] = []
 
     try:
@@ -104,7 +107,9 @@ async def run_merchant(
                 else:
                     assert http is not None
                     fetched = await scraper.fetch(target, http)
+                throttled_responses += fetched.throttled_responses
             except Exception as exc:  # noqa: BLE001 - one page must not kill the batch
+                fetch_failures += 1
                 failures.append(f"fetch {target}: {exc}")
                 logger.error(
                     "scrape_fetch_failed", merchant=merchant_key, url=target, error=str(exc)
@@ -142,6 +147,7 @@ async def run_merchant(
             try:
                 listings = scraper.parse(fetched.html, url=fetched.url)
             except Exception as exc:  # noqa: BLE001 - record the failure as run health
+                parse_failures += 1
                 snapshot.parse_status = ParseStatus.FAILED
                 snapshot.error = str(exc)
                 snapshot.parsed_at = datetime.now(UTC)
@@ -221,6 +227,9 @@ async def run_merchant(
     run.listings_found = total_found
     run.listings_parsed = total_found
     run.snapshots_new = snapshots_new
+    run.throttled_responses = throttled_responses
+    run.fetch_failures = fetch_failures
+    run.parse_failures = parse_failures
     if failures:
         run.status = RunStatus.FAILED if snapshots_new == 0 else RunStatus.PARTIAL
         run.error = "; ".join(failures)
@@ -238,6 +247,9 @@ async def run_merchant(
         snapshots=snapshots_new,
         listings=total_found,
         matched=total_matched,
+        throttled=throttled_responses,
+        fetch_failures=fetch_failures,
+        parse_failures=parse_failures,
         status=run.status.value,
     )
     return run

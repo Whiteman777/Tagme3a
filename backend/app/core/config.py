@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     SCRAPE_CRON_MINUTE: int = 0
     RECOMPUTE_CRON_MINUTE: int = 30
 
+    # Scraper monitoring. Alerts are always logged; the webhook is optional.
+    SCRAPER_ALERT_WEBHOOK_URL: str = ""
+    SCRAPER_ALERT_FAILURE_LIMIT: int = 2
+    SCRAPER_ALERT_THROTTLE_LIMIT: int = 3
+    SCRAPER_ALERT_DROP_RATIO: float = 0.5
+
     # M3 matching (deterministic; no AI decisions)
     MATCH_AUTO_MIN: Decimal = Decimal("0.88")
     MATCH_REVIEW_MIN: Decimal = Decimal("0.72")

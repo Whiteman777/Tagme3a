@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +42,13 @@ class ListingMatchRequest(BaseModel):
     product_id: int = Field(gt=0)
 
 
+class ScraperAlert(BaseModel):
+    merchant_key: str
+    code: str
+    severity: Literal["warning", "critical"]
+    message: str
+
+
 class ScraperHealth(BaseModel):
     merchant_key: str
     adapter_key: str | None
@@ -49,6 +57,10 @@ class ScraperHealth(BaseModel):
     last_run_at: datetime | None
     last_error: str | None
     failures_24h: int
+    throttles_24h: int = 0
+    fetch_failures_24h: int = 0
+    parse_failures_24h: int = 0
+    alerts: list[ScraperAlert] = Field(default_factory=list)
 
 
 class ScrapeJob(BaseModel):

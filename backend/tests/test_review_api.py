@@ -141,7 +141,10 @@ async def test_scraper_health_reports_last_run(
     health = {item["merchant_key"]: item for item in response.json()}
     assert health["sigma"]["last_status"] == "ok"
     assert health["sigma"]["failures_24h"] == 0
+    assert health["sigma"]["throttles_24h"] == 0
+    assert health["sigma"]["alerts"] == []
     assert health["compumarts"]["last_status"] is None
+    assert any(a["code"] == "NO_RECENT_RUN" for a in health["compumarts"]["alerts"])
 
 
 async def test_admin_can_enqueue_manual_scrape(admin_client: AsyncClient, seeded: None) -> None:

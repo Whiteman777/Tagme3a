@@ -1,6 +1,6 @@
 """Reviewer/admin review queue, scraper health and manual scrape triggering."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from arq.connections import ArqRedis
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_arq_pool, get_current_admin, get_current_reviewer
 from app.core.db import get_db
 from app.models.catalog import Merchant, Product
-from app.models.scraping import MatchStatus, RunStatus, ScraperRun, StagingListing
+from app.models.scraping import MatchStatus, StagingListing
 from app.models.user import User
 from app.schemas.scraping import (
     ListingMatchRequest,
@@ -22,6 +22,7 @@ from app.schemas.scraping import (
 )
 from app.services.ingestion import recompute_offers
 from app.services.matcher import learn_alias
+from app.services.monitoring import evaluate_scraper_health
 
 router = APIRouter(prefix="/admin", tags=["admin", "review"])
 
@@ -145,24 +146,11 @@ async def scraper_health(
     _admin: User = Depends(get_current_admin),
 ) -> list[ScraperHealth]:
     merchants = (await db.scalars(select(Merchant).order_by(Merchant.key))).all()
-    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    snapshots = await evaluate_scraper_health(db)
     health: list[ScraperHealth] = []
     for merchant in merchants:
-        last = await db.scalar(
-            select(ScraperRun)
-            .where(ScraperRun.merchant_id == merchant.id)
-            .order_by(ScraperRun.started_at.desc(), ScraperRun.id.desc())
-            .limit(1)
-        )
-        failures = await db.scalar(
-            select(func.count())
-            .select_from(ScraperRun)
-            .where(
-                ScraperRun.merchant_id == merchant.id,
-                ScraperRun.started_at >= cutoff,
-                ScraperRun.status == RunStatus.FAILED,
-            )
-        )
+        snapshot = snapshots[merchant.key]
+        last = snapshot.last_run
         health.append(
             ScraperHealth(
                 merchant_key=merchant.key,
@@ -171,7 +159,11 @@ async def scraper_health(
                 last_status=last.status if last else None,
                 last_run_at=last.started_at if last else None,
                 last_error=last.error if last else None,
-                failures_24h=int(failures or 0),
+                failures_24h=snapshot.failures_24h,
+                throttles_24h=snapshot.throttles_24h,
+                fetch_failures_24h=snapshot.fetch_failures_24h,
+                parse_failures_24h=snapshot.parse_failures_24h,
+                alerts=snapshot.alerts,
             )
         )
     return health

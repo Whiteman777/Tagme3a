@@ -17,7 +17,7 @@ tagme3a/
 │   │   ├── api/v1/               # routers (auth, products, builder, laptops, prices)
 │   │   ├── models/               # SQLAlchemy 2.0 ORM
 │   │   ├── schemas/              # Pydantic v2
-│   │   ├── services/             # matcher, compatibility, recommender, pricing, text_gen
+│   │   ├── services/             # matcher, monitoring, compatibility, recommender, pricing, text_gen
 │   │   ├── scrapers/             # base.py + sigma.py, compumarts.py, nekhely.py, twob.py
 │   │   ├── workers/              # arq tasks + scheduler
 │   │   └── data/                 # seed data: cpus, gpus, sockets, compat matrix
@@ -175,7 +175,7 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 
 ### M2 — Scraping MVP
 
-- `BaseScraper` + **Sigma** and **Compumarts** adapters; raw→staging.
+- `BaseScraper` + **Sigma**, **Compumarts**, **Nekhely** and **2B** adapters; raw→staging.
 - arq worker + cron; price history; ghost-inventory marking.
 - Admin review queue (basic).
 - **Exit:** daily prices flowing for 2 merchants; price history available via API.
@@ -183,8 +183,9 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > **Status (2026-11-27):** implemented on `backend` (runbook: `backend/M2.md`).
 > Raw snapshots, staging, run health, four adapters (Sigma, Compumarts, Nekhely,
 > 2B) with real-HTML fixture tests, arq daily cron (02:00 UTC scrape, 02:30 UTC
-> ghost recompute), admin review queue, scraper health and manual enqueue are in
-> place. All four selectors are tuned against real server-rendered pages and page
+> ghost recompute), admin review queue, scraper health with deterministic alerts,
+> optional alert webhook and manual enqueue are in place. All four selectors are
+> tuned against real server-rendered pages and page
 > links are discovered dynamically with per-adapter caps. Amazon.eg is excluded
 > (ToS bans automated price collection) and replaced by 2B; the parked
 > `elnekhely.com` seed was retargeted to `elnekhelytechnology.com`. Full Web Bot

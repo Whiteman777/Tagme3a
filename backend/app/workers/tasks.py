@@ -9,6 +9,7 @@ from app.core.logging import logger
 from app.models.catalog import Merchant
 from app.scrapers.registry import SCRAPERS
 from app.services.ingestion import recompute_offers, run_merchant
+from app.services.monitoring import emit_alerts, evaluate_scraper_health
 
 
 async def scrape_all(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -35,9 +36,13 @@ async def scrape_all(ctx: dict[str, Any]) -> dict[str, Any]:
                 logger.error("worker_merchant_failed", merchant=key, error=str(exc))
 
         stats = await recompute_offers(db)
+        health = await evaluate_scraper_health(db)
 
-    logger.info("worker_scrape_complete", runs=runs, **stats)
-    return {"runs": runs, "offers": stats}
+    alerts = await emit_alerts(
+        {merchant_key: snapshot.alerts for merchant_key, snapshot in health.items()}
+    )
+    logger.info("worker_scrape_complete", runs=runs, alerts=alerts, **stats)
+    return {"runs": runs, "offers": stats, "alerts": alerts}
 
 
 async def recompute_offers_job(ctx: dict[str, Any]) -> dict[str, int]:

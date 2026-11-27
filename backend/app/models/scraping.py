@@ -171,6 +171,9 @@ class ScraperRun(Base):
     listings_found: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     listings_parsed: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     snapshots_new: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    throttled_responses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    fetch_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    parse_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

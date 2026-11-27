@@ -182,6 +182,7 @@ async def test_fetch_honors_retry_after_on_429() -> None:
 
     assert attempts == 2
     assert fetched.status_code == 200
+    assert fetched.throttled_responses == 1
 
 
 def test_nekhely_real_fixture_parses_cards_and_pagination() -> None:
