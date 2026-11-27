@@ -50,6 +50,29 @@ def test_parses_specs_and_aliases() -> None:
     assert sku.aliases == ("vengeance 32gb 6400", "Corsair 32G 6400")
 
 
+def test_deduplicates_aliases_that_normalize_identically() -> None:
+    text = _csv(
+        [
+            [
+                "ddr5-32g-6400",
+                "ram",
+                "Corsair",
+                "Vengeance 32GB 6400",
+                "Corsair Vengeance 32GB DDR5 6400",
+                "",
+                "",
+                "",
+                "{}",
+                "Corsair 32G 6400|Corsair 32G, 6400|vengeance-32gb-6400",
+            ]
+        ]
+    )
+
+    skus = parse_skus(text)
+
+    assert skus[0].aliases == ("Corsair 32G 6400", "vengeance-32gb-6400")
+
+
 def test_rejects_missing_required_column() -> None:
     text = _csv([], header=["slug", "brand", "model"])
 

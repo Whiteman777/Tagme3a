@@ -77,11 +77,18 @@ def parse_skus(csv_text: str) -> list[CuratedSku]:
             raw_aliases = row.get("aliases") or ""
             for separator in ALIAS_SEPARATORS[1:]:
                 raw_aliases = raw_aliases.replace(separator, ALIAS_SEPARATORS[0])
-            aliases = tuple(
-                alias.strip()
-                for alias in raw_aliases.split(ALIAS_SEPARATORS[0])
-                if alias.strip()
-            )
+            aliases_list: list[str] = []
+            seen_aliases: set[str] = set()
+            for raw_alias in raw_aliases.split(ALIAS_SEPARATORS[0]):
+                alias = raw_alias.strip()
+                if not alias:
+                    continue
+                normalized = normalize(alias)
+                if not normalized or normalized in seen_aliases:
+                    continue
+                seen_aliases.add(normalized)
+                aliases_list.append(alias)
+            aliases = tuple(aliases_list)
 
             product = ProductCreate(
                 slug=(row.get("slug") or "").strip(),
