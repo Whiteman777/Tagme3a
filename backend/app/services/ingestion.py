@@ -79,7 +79,7 @@ async def run_merchant(
         delay=0 if html is not None else settings.SCRAPER_DELAY_SECONDS,
         timeout=settings.SCRAPER_TIMEOUT_SECONDS,
         max_retries=settings.SCRAPER_MAX_RETRIES,
-        user_agents=tuple(settings.SCRAPER_USER_AGENTS),
+        user_agents=tuple(scraper_type.user_agents or settings.SCRAPER_USER_AGENTS),
         client=client,
     )
     if html is not None or url is not None:

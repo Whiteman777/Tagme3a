@@ -38,7 +38,7 @@ MERCHANTS: list[MerchantRead] = [
         key="compumarts",
         name="Compumarts",
         name_ar="كومبيومارتس",
-        base_url="https://compumarts.com",
+        base_url="https://www.compumarts.com",
         is_active=True,
     ),
     MerchantRead(

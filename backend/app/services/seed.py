@@ -13,7 +13,7 @@ from app.services.search import search_service
 
 MERCHANTS = [
     ("sigma", "Sigma Computer", "سيجما كمبيوتر", "https://sigma-computer.com", "sigma"),
-    ("compumarts", "Compumarts", "كومبيومارتس", "https://compumarts.com", "compumarts"),
+    ("compumarts", "Compumarts", "كومبيومارتس", "https://www.compumarts.com", "compumarts"),
     ("nekhely", "El-Nekhely Technology", "النخلي للتكنولوجيا", "https://elnekhely.com", "nekhely"),
     ("amazon_eg", "Amazon.eg", "أمازون مصر", "https://amazon.eg", "amazon_eg"),
 ]

@@ -86,6 +86,45 @@ def test_compumarts_fixture_parses_two_listings() -> None:
     assert listings[1].in_stock is False
 
 
+def test_compumarts_real_fixture_parses_sold_out_and_fresh() -> None:
+    html = (FIXTURES / "compumarts_listing_real.html").read_text(encoding="utf-8")
+    scraper = CompumartsScraper(delay=0)
+    listings = scraper.parse(html, url=scraper.listings_url)
+
+    assert len(listings) == 2
+    assert listings[0].external_id == "7627647844501"
+    assert listings[0].price_egp == Decimal("111360.00")
+    assert listings[0].in_stock is False
+    assert listings[0].brand == "INTEL"
+    assert listings[1].external_id == "9193018917013"
+    assert listings[1].price_egp == Decimal("51500.00")
+    assert listings[1].in_stock is True
+    assert listings[1].brand == "AMD"
+
+
+def test_compumarts_gpu_real_fixture_parses_prices() -> None:
+    html = (FIXTURES / "compumarts_gpu_real.html").read_text(encoding="utf-8")
+    scraper = CompumartsScraper(delay=0)
+    listings = scraper.parse(html, url=scraper.listings_url)
+
+    assert len(listings) == 2
+    assert listings[0].external_id == "9076193329301"
+    assert listings[0].price_egp == Decimal("448890.00")
+    assert listings[0].title.startswith("MSI GeForce RTX")
+    assert listings[0].in_stock is False
+
+
+def test_compumarts_uses_identifying_agent_and_public_collections() -> None:
+    scraper = CompumartsScraper()
+
+    assert all("Tagme3aPriceBot" in ua for ua in scraper.user_agents)
+    urls = scraper.listing_urls()
+    assert len(urls) == 24
+    assert any("pc-parts-proccesor" in url and "page=1" in url for url in urls)
+    assert any("pc-parts-graphic-card" in url and "page=3" in url for url in urls)
+    assert all("/cart" not in url and "/checkout" not in url for url in urls)
+
+
 def test_registry_maps_merchant_adapter_keys() -> None:
     assert available_scrapers() == ["compumarts", "sigma"]
     assert get_scraper("sigma") is SigmaScraper

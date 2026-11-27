@@ -147,6 +147,7 @@ class BaseScraper(ABC):
     key: str = ""
     base_url: str = ""
     listings_url: str = ""
+    user_agents: tuple[str, ...] = ()
 
     def __init__(
         self,
@@ -154,13 +155,15 @@ class BaseScraper(ABC):
         delay: float = 1.0,
         timeout: float = 15.0,
         max_retries: int = 2,
-        user_agents: tuple[str, ...] = DEFAULT_USER_AGENTS,
+        user_agents: tuple[str, ...] | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.delay = delay
         self.timeout = timeout
         self.max_retries = max_retries
-        self._agents: Iterator[str] = itertools.cycle(user_agents or DEFAULT_USER_AGENTS)
+        self._agents: Iterator[str] = itertools.cycle(
+            user_agents or self.user_agents or DEFAULT_USER_AGENTS
+        )
         self._client = client
         self._last_request: dict[str, datetime] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
