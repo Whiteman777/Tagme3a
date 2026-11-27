@@ -1,5 +1,7 @@
 """Web Bot Auth signing: RFC 9421 headers and Compumarts integration."""
 
+import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -14,6 +16,7 @@ from app.scrapers.web_bot_auth import (
     WebBotAuthSigner,
     _jwk_thumbprint,
     key_directory,
+    public_jwk,
 )
 
 AGENT_URL = "https://tagme3a.example/.well-known/http-message-signatures-directory"
@@ -133,3 +136,18 @@ async def test_compumarts_fetch_adds_signed_headers(monkeypatch: Any) -> None:
     assert "signature-input" in page.headers
     assert "signature" in page.headers
     assert "signature" in captured[0].headers  # robots.txt is signed too
+
+
+def test_published_directory_matches_configured_key() -> None:
+    """When a local key is configured, the public directory must match it."""
+    if not (settings.WEB_BOT_AUTH_PRIVATE_KEY and settings.WEB_BOT_AUTH_AGENT_URL):
+        pytest.skip("Web Bot Auth is not configured in this environment")
+
+    directory_path = Path(__file__).resolve().parents[1] / "web_bot_auth_directory.json"
+    directory = json.loads(directory_path.read_text(encoding="utf-8"))
+    signer = WebBotAuthSigner.from_settings()
+    assert signer is not None
+    assert signer.agent_url == settings.WEB_BOT_AUTH_AGENT_URL
+
+    published = {key: value for key, value in directory["keys"][0].items() if key != "exp"}
+    assert published == public_jwk(signer.private_key, key_id=signer.key_id)
