@@ -25,7 +25,7 @@ import httpx
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.config import settings
-from app.core.security import decode_token
+from app.core.security import _get_firebase_app, decode_token
 
 
 def _parse_args() -> argparse.Namespace:
@@ -90,6 +90,9 @@ def _verify_with_emulator(args: argparse.Namespace) -> None:
 
     os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = host
     from firebase_admin import auth as firebase_auth
+
+    # Initialise through the backend's own config so the emulator path is used.
+    _get_firebase_app()
 
     email = f"verify-{secrets.token_hex(5)}@example.com"
     password = secrets.token_urlsafe(18)

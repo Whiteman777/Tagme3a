@@ -1,12 +1,18 @@
 """Unit coverage for the real Firebase verification code path."""
 
+import argparse
+from types import SimpleNamespace
 from typing import Any
 
+import firebase_admin.auth
+import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core import security
+from app.core.config import settings
+from scripts import verify_firebase_auth as verify_script
 
 
 @pytest.fixture(autouse=True)
@@ -71,3 +77,44 @@ def test_emulator_init_skips_service_account(monkeypatch: pytest.MonkeyPatch) ->
 
     assert security._get_firebase_app() is sentinel
     assert captured == {"credential": None, "options": {"projectId": "demo-tagme3a"}}
+
+
+def test_emulator_script_initializes_app_before_creating_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    created_email: dict[str, str] = {}
+    monkeypatch.delenv("FIREBASE_AUTH_EMULATOR_HOST", raising=False)
+    monkeypatch.setattr(settings, "FIREBASE_PROJECT_ID", "demo-tagme3a")
+    monkeypatch.setattr(verify_script, "_get_firebase_app", lambda: calls.append("init"))
+    def fake_create_user(**kwargs: Any) -> SimpleNamespace:
+        calls.append("create")
+        created_email["value"] = kwargs["email"]
+        return SimpleNamespace(uid="uid-1")
+
+    monkeypatch.setattr(firebase_admin.auth, "create_user", fake_create_user)
+    monkeypatch.setattr(
+        firebase_admin.auth,
+        "delete_user",
+        lambda uid: calls.append("delete"),
+    )
+    monkeypatch.setattr(
+        verify_script.httpx,
+        "post",
+        lambda *args, **kwargs: httpx.Response(
+            200,
+            json={"idToken": "emulator-token"},
+            request=httpx.Request("POST", "http://emulator.test/token"),
+        ),
+    )
+    monkeypatch.setattr(
+        verify_script,
+        "_decode",
+        lambda token: {"uid": "uid-1", "email": created_email["value"]},
+    )
+
+    verify_script._verify_with_emulator(
+        argparse.Namespace(emulator_host="127.0.0.1:9099", expected_uid=None)
+    )
+
+    assert calls == ["init", "create", "delete"]

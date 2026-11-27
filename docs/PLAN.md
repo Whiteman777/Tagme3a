@@ -188,9 +188,9 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > tuned against real server-rendered pages and page
 > links are discovered dynamically with per-adapter caps. Amazon.eg is excluded
 > (ToS bans automated price collection) and replaced by 2B; the parked
-> `elnekhely.com` seed was retargeted to `elnekhelytechnology.com`. Client-side
-> Web Bot Auth (RFC 9421) signing is implemented and tested but stays disabled
-> until the Compumarts owner publishes the HTTPS JWK directory and supplies keys.
+> `elnekhely.com` seed was retargeted to `elnekhelytechnology.com`. Web Bot Auth
+> (RFC 9421) is published at a stable HTTPS JWK directory, with the private key
+> kept in the worker secret store; a live signed Compumarts fetch returned 200.
 > Cron enqueue firing is covered by a fake-pool test;
 > a live Redis observation recipe is in `backend/M2.md`.
 
@@ -209,8 +209,8 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > auto-matches correct; the raw rate (22/3,064) is lower because the 15-SKU
 > development catalog does not cover most listed products. Full Docker stack
 > verified pgvector, Meilisearch indexing and on-demand arq execution. Real
-> Firebase verification now has an emulator/live-token harness
-> (`backend/M3.md`); it still requires owner credentials or a running emulator.
+> Firebase verification has been exercised against the Auth emulator through
+> the real verifier (`backend/M3.md`); a live project token remains an owner step.
 > SKU-curation reporting is in `backend/SKU_CURATION.md`, and alert webhook
 > wiring guidance is in `backend/OPS_WEBHOOKS.md`.
 
