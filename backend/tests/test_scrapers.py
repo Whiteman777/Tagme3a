@@ -38,6 +38,16 @@ def test_sigma_fixture_parses_two_listings() -> None:
     assert listings[1].in_stock is False
 
 
+def test_sigma_listing_urls_include_component_searches() -> None:
+    urls = SigmaScraper().listing_urls()
+
+    assert len(urls) == 9
+    assert urls[0].startswith("https://sigma-computer.com/en/category/")
+    assert any("q=graphics+card" in url for url in urls)
+    assert any("q=ryzen+5+7600" in url for url in urls)
+    assert all("/api/" not in url for url in urls)
+
+
 def test_sigma_real_fixture_parses_server_rendered_cards() -> None:
     html = (FIXTURES / "sigma_listing_real.html").read_text(encoding="utf-8")
     scraper = SigmaScraper(delay=0)

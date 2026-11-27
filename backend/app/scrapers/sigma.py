@@ -6,7 +6,7 @@ container that shows ``Out Of Stock`` when needed. Parsing those cards keeps the
 adapter independent of the site's internal API (which robots.txt disallows).
 """
 
-from urllib.parse import parse_qs, unquote, urljoin, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -26,6 +26,19 @@ class SigmaScraper(BaseScraper):
     base_url = "https://sigma-computer.com"
     listings_url = f"{base_url}/en/category/9f5039de-5c80-46f3-9fe4-6e8f94189b8c"  # Laptops
 
+    # Public, robots-allowed searches that surface components (the category
+    # redirect alone is laptop-heavy). Verified on real pages 2026-11-27.
+    search_queries: tuple[str, ...] = (
+        "ryzen 5 7600",
+        "core i5 14600k",
+        "ryzen 7 7800x3d",
+        "graphics card",
+        "motherboard",
+        "ddr5",
+        "ssd",
+        "power supply",
+    )
+
     # Fallback for older saved snapshots that used simple product cards.
     selectors = Selectors(
         card="div.product-item",
@@ -35,6 +48,11 @@ class SigmaScraper(BaseScraper):
         stock=".stock",
         external_id_attr="data-product-id",
     )
+
+    def listing_urls(self) -> list[str]:
+        return [self.listings_url] + [
+            f"{self.base_url}/en/search?{urlencode({'q': query})}" for query in self.search_queries
+        ]
 
     def parse(self, html: str, *, url: str) -> list[ScrapedListing]:
         page_url = url or self.listings_url

@@ -165,6 +165,10 @@ class BaseScraper(ABC):
         self._last_request: dict[str, datetime] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
 
+    def listing_urls(self) -> list[str]:
+        """Public pages to scrape for this merchant (one by default)."""
+        return [self.listings_url]
+
     @abstractmethod
     def parse(self, html: str, *, url: str) -> list[ScrapedListing]:
         """Return listings from one HTML page."""

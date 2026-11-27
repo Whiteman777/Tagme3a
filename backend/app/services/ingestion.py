@@ -60,8 +60,10 @@ async def run_merchant(
 ) -> ScraperRun:
     """Scrape one merchant and stage its listings.
 
-    Passing ``html`` skips all network I/O, which keeps the pipeline testable
-    and lets operators reparse a retained snapshot.
+    Passing ``html`` skips all network I/O and stages a single snapshot, which
+    keeps the pipeline testable and lets operators reparse a retained snapshot.
+    Live runs iterate ``scraper.listing_urls()`` so an adapter can cover several
+    public pages (Sigma uses a category plus component searches).
     """
     merchant = await db.scalar(select(Merchant).where(Merchant.key == merchant_key))
     if merchant is None or not merchant.is_active:
@@ -73,131 +75,154 @@ async def run_merchant(
     db.add(run)
     await db.flush()
 
+    scraper = scraper_type(
+        delay=0 if html is not None else settings.SCRAPER_DELAY_SECONDS,
+        timeout=settings.SCRAPER_TIMEOUT_SECONDS,
+        max_retries=settings.SCRAPER_MAX_RETRIES,
+        user_agents=tuple(settings.SCRAPER_USER_AGENTS),
+        client=client,
+    )
+    if html is not None or url is not None:
+        targets = [url or scraper_type.listings_url]
+    else:
+        targets = scraper.listing_urls()
+
+    own_client = html is None and client is None
+    http = client or (
+        httpx.AsyncClient(timeout=settings.SCRAPER_TIMEOUT_SECONDS, follow_redirects=True)
+        if own_client
+        else None
+    )
+
+    total_found = 0
+    total_matched = 0
+    snapshots_new = 0
+    failures: list[str] = []
+
     try:
-        if html is not None:
-            page_url = url or scraper_type.listings_url
-            fetched = FetchResult(
-                url=page_url,
-                html=html,
-                status_code=200,
-                checksum=hashlib.sha256(html.encode("utf-8")).hexdigest(),
-                fetched_at=started,
-            )
-            scraper = scraper_type(delay=0, client=client)
-        else:
-            scraper = scraper_type(
-                delay=settings.SCRAPER_DELAY_SECONDS,
-                timeout=settings.SCRAPER_TIMEOUT_SECONDS,
-                max_retries=settings.SCRAPER_MAX_RETRIES,
-                user_agents=tuple(settings.SCRAPER_USER_AGENTS),
-                client=client,
-            )
-            own_client = client is None
-            http = client or httpx.AsyncClient(
-                timeout=settings.SCRAPER_TIMEOUT_SECONDS, follow_redirects=True
-            )
+        for target in targets:
             try:
-                fetched = await scraper.fetch(url or scraper_type.listings_url, http)
-            finally:
-                if own_client:
-                    await http.aclose()
-    except Exception as exc:  # noqa: BLE001 - one failed merchant must not kill the batch
-        run.status = RunStatus.FAILED
-        run.error = str(exc)
-        _finish_run(run, started)
-        await db.commit()
-        logger.error("scrape_fetch_failed", merchant=merchant_key, error=str(exc))
-        return run
+                if html is not None:
+                    fetched = FetchResult(
+                        url=target,
+                        html=html,
+                        status_code=200,
+                        checksum=hashlib.sha256(html.encode("utf-8")).hexdigest(),
+                        fetched_at=started,
+                    )
+                else:
+                    assert http is not None
+                    fetched = await scraper.fetch(target, http)
+            except Exception as exc:  # noqa: BLE001 - one page must not kill the batch
+                failures.append(f"fetch {target}: {exc}")
+                logger.error(
+                    "scrape_fetch_failed", merchant=merchant_key, url=target, error=str(exc)
+                )
+                continue
 
-    existing = await db.scalar(
-        select(RawSnapshot).where(
-            RawSnapshot.merchant_id == merchant.id,
-            RawSnapshot.url == fetched.url,
-            RawSnapshot.checksum == fetched.checksum,
-        )
-    )
-    if existing is not None:
-        run.status = RunStatus.OK
-        run.snapshots_new = 0
-        _finish_run(run, started)
-        await db.commit()
-        logger.info("scrape_unchanged", merchant=merchant_key, url=fetched.url)
-        return run
-
-    snapshot = RawSnapshot(
-        merchant_id=merchant.id,
-        url=fetched.url,
-        checksum=fetched.checksum,
-        content=fetched.html,
-        status_code=fetched.status_code,
-        parse_status=ParseStatus.PENDING,
-        fetched_at=fetched.fetched_at,
-    )
-    db.add(snapshot)
-    await db.flush()
-
-    try:
-        listings = scraper.parse(fetched.html, url=fetched.url)
-    except Exception as exc:  # noqa: BLE001 - record the failure as run health
-        snapshot.parse_status = ParseStatus.FAILED
-        snapshot.error = str(exc)
-        snapshot.parsed_at = datetime.now(UTC)
-        run.status = RunStatus.FAILED
-        run.error = str(exc)
-        _finish_run(run, started)
-        await db.commit()
-        logger.error("scrape_parse_failed", merchant=merchant_key, error=str(exc))
-        return run
-
-    matched = 0
-    for listing in listings:
-        product, confidence = await _match_product(db, listing)
-        staging = await db.scalar(
-            select(StagingListing).where(
-                StagingListing.merchant_id == merchant.id,
-                StagingListing.external_id == listing.external_id,
+            existing = await db.scalar(
+                select(RawSnapshot).where(
+                    RawSnapshot.merchant_id == merchant.id,
+                    RawSnapshot.url == fetched.url,
+                    RawSnapshot.checksum == fetched.checksum,
+                )
             )
-        )
-        if staging is None:
-            staging = StagingListing(merchant_id=merchant.id, external_id=listing.external_id)
-            db.add(staging)
+            if existing is not None:
+                logger.info("scrape_unchanged", merchant=merchant_key, url=fetched.url)
+                continue
 
-        staging.raw_snapshot_id = snapshot.id
-        staging.raw_title = listing.title
-        staging.normalized_name = listing.title
-        staging.brand = listing.brand
-        staging.model = listing.model
-        staging.price_egp = listing.price_egp
-        staging.currency = listing.currency
-        staging.in_stock = listing.in_stock
-        staging.url = listing.url
+            snapshot = RawSnapshot(
+                merchant_id=merchant.id,
+                url=fetched.url,
+                checksum=fetched.checksum,
+                content=fetched.html,
+                status_code=fetched.status_code,
+                parse_status=ParseStatus.PENDING,
+                fetched_at=fetched.fetched_at,
+            )
+            db.add(snapshot)
+            await db.flush()
 
-        if product is not None:
-            staging.product_id = product.id
-            staging.category = product.category
-            staging.match_status = MatchStatus.AUTO_MATCHED
-            staging.match_confidence = confidence
-            matched += 1
-        elif staging.match_status not in (MatchStatus.MATCHED, MatchStatus.AUTO_MATCHED):
-            staging.match_status = MatchStatus.UNMATCHED
-            staging.match_confidence = None
-            staging.product_id = None
+            try:
+                listings = scraper.parse(fetched.html, url=fetched.url)
+            except Exception as exc:  # noqa: BLE001 - record the failure as run health
+                snapshot.parse_status = ParseStatus.FAILED
+                snapshot.error = str(exc)
+                snapshot.parsed_at = datetime.now(UTC)
+                failures.append(f"parse {fetched.url}: {exc}")
+                logger.error(
+                    "scrape_parse_failed",
+                    merchant=merchant_key,
+                    url=fetched.url,
+                    error=str(exc),
+                )
+                continue
 
-    snapshot.parse_status = ParseStatus.PARSED
-    snapshot.parsed_at = datetime.now(UTC)
-    run.listings_found = len(listings)
-    run.listings_parsed = len(listings)
-    run.snapshots_new = 1
-    run.status = RunStatus.OK if matched == len(listings) else RunStatus.PARTIAL
-    if unmatched := len(listings) - matched:
+            matched = 0
+            for listing in listings:
+                product, confidence = await _match_product(db, listing)
+                staging = await db.scalar(
+                    select(StagingListing).where(
+                        StagingListing.merchant_id == merchant.id,
+                        StagingListing.external_id == listing.external_id,
+                    )
+                )
+                if staging is None:
+                    staging = StagingListing(
+                        merchant_id=merchant.id, external_id=listing.external_id
+                    )
+                    db.add(staging)
+
+                staging.raw_snapshot_id = snapshot.id
+                staging.raw_title = listing.title
+                staging.normalized_name = listing.title
+                staging.brand = listing.brand
+                staging.model = listing.model
+                staging.price_egp = listing.price_egp
+                staging.currency = listing.currency
+                staging.in_stock = listing.in_stock
+                staging.url = listing.url
+
+                if product is not None:
+                    staging.product_id = product.id
+                    staging.category = product.category
+                    staging.match_status = MatchStatus.AUTO_MATCHED
+                    staging.match_confidence = confidence
+                    matched += 1
+                elif staging.match_status not in (MatchStatus.MATCHED, MatchStatus.AUTO_MATCHED):
+                    staging.match_status = MatchStatus.UNMATCHED
+                    staging.match_confidence = None
+                    staging.product_id = None
+
+            snapshot.parse_status = ParseStatus.PARSED
+            snapshot.parsed_at = datetime.now(UTC)
+            snapshots_new += 1
+            total_found += len(listings)
+            total_matched += matched
+    finally:
+        if own_client and http is not None:
+            await http.aclose()
+
+    run.listings_found = total_found
+    run.listings_parsed = total_found
+    run.snapshots_new = snapshots_new
+    if failures:
+        run.status = RunStatus.FAILED if snapshots_new == 0 else RunStatus.PARTIAL
+        run.error = "; ".join(failures)
+    elif unmatched := total_found - total_matched:
+        run.status = RunStatus.PARTIAL
         run.error = f"{unmatched} listing(s) need review"
+    else:
+        run.status = RunStatus.OK
     _finish_run(run, started)
     await db.commit()
     logger.info(
         "scrape_staged",
         merchant=merchant_key,
-        listings=len(listings),
-        matched=matched,
+        pages=len(targets),
+        snapshots=snapshots_new,
+        listings=total_found,
+        matched=total_matched,
         status=run.status.value,
     )
     return run
