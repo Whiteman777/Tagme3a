@@ -32,6 +32,7 @@ class ProductCategory(StrEnum):
     COOLER = "cooler"
     STORAGE = "storage"
     LAPTOP = "laptop"
+    PREBUILT = "prebuilt"
     PERIPHERAL = "peripheral"
 
 

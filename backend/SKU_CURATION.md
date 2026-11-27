@@ -1,6 +1,6 @@
 # SKU curation workflow
 
-Status: **report + CSV importer ready; target SKU list required from the owner**.
+Status: **broad candidate CSV + importer ready; owner review and DB import pending**.
 
 The deterministic matcher can only match products present in the curated catalog.
 With 15 development SKUs and 3,064 staged listings, most unmatched rows are
@@ -23,6 +23,43 @@ normalized title, with brand/model, observed EGP price range, any reviewer
 suggestion, and a sample URL. Rejected rows are excluded. Auto-matched rows can
 be included with `--status auto_matched` if desired.
 
+## Generate the broad catalog candidate CSV
+
+To cover every product type the project tracks — CPU, GPU, motherboard, RAM,
+PSU, case, cooler, storage, laptop, prebuilt and peripheral — generate a
+candidate CSV from the same robots-allowed public listing pages the scrapers
+use:
+
+```bash
+cd backend
+uv run python -m scripts.build_curated_sku_csv --output data/curated_skus_all.csv
+```
+
+This fetches only the registered adapters' public listing/pagination URLs with
+the normal 1s politeness delay, groups identical normalized titles, and extracts
+deterministic brand/category/spec/alias values. No AI invents products,
+compatibility or rankings, and no database is touched.
+
+The latest run produced `data/curated_skus_all.csv` with **2,998 candidate SKUs**
+from 130 pages / 3,149 listings / 3,042 title groups:
+
+| Category | Rows |
+|---|---:|
+| case | 403 |
+| cooler | 14 |
+| cpu | 267 |
+| gpu | 549 |
+| laptop | 259 |
+| motherboard | 710 |
+| peripheral | 64 |
+| prebuilt | 10 |
+| psu | 386 |
+| ram | 205 |
+| storage | 131 |
+
+Counts will drift as merchant pages change. This file is **review input**, not
+an approved catalog: confirm names, specs and aliases before import.
+
 ## Add curated SKUs
 
 Fill `data/curated_skus_template.csv` with owner-approved rows, then validate it
@@ -40,7 +77,7 @@ columns:
 - Required: `slug`, `category`, `brand`, `model`, `name`.
 - Optional: `name_ar`, `description`, `image_url`, `specs_json`, `aliases`.
 - `category` is one of `cpu`, `gpu`, `motherboard`, `ram`, `psu`, `case`,
-  `cooler`, `storage`, `laptop`, `peripheral`.
+  `cooler`, `storage`, `laptop`, `prebuilt`, `peripheral`.
 - `specs_json` must be a JSON object. Include price-relevant attributes the
   matcher gates on, e.g. `{"capacity_gb": 32, "speed": 6400}` for RAM or
   `{"vram": "16GB", "tdp": 285}` for a GPU.
@@ -76,8 +113,9 @@ needs Postgres; the importer's `--dry-run` validation does not.
 
 ## Owner input still needed
 
-Provide the target SKU shortlist (canonical names + brands/models + expected
-categories) for the Egyptian market. Once supplied, products can be added and the
-raw match rate measured again. No AI is used to invent SKUs, compatibility, or
-ranking; additions are explicit curated content, with AR/EN phrasing handled
-separately as copy only.
+The broad CSV removes the need to type every title by hand, but it still needs an
+owner review pass: confirm canonical names, brands/models, categories,
+`specs_json`, and AR names; drop anything not sold/tracked by the project. Once
+approved, import it and measure the raw match rate again. No AI is used to
+invent SKUs, compatibility, or ranking; additions are explicit curated content,
+with AR/EN phrasing handled separately as copy only.

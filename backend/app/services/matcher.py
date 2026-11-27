@@ -67,20 +67,70 @@ _NOISE = frozenset(
 )
 
 _BRAND_ALIASES = {
+    "abkoncore": "abkoncore",
+    "acer": "acer",
+    "adata": "adata",
+    "addlink": "addlink",
+    "aerocool": "aerocool",
+    "apacer": "apacer",
     "amd": "amd",
+    "antec": "antec",
+    "apple": "apple",
+    "asrock": "asrock",
     "asus": "asus",
+    "be quiet": "be quiet",
+    "bequiet": "be quiet",
+    "biostar": "biostar",
+    "colorful": "colorful",
+    "cooler master": "cooler master",
+    "coolermaster": "cooler master",
     "corsair": "corsair",
+    "crucial": "crucial",
+    "deepcool": "deepcool",
+    "dell": "dell",
+    "fractal design": "fractal design",
+    "fractaldesign": "fractal design",
     "g skill": "g skill",
+    "gainward": "gainward",
+    "galax": "galax",
     "gigabyte": "gigabyte",
     "gskill": "g skill",
+    "hp": "hp",
     "intel": "intel",
+    "kingston": "kingston",
+    "lg": "lg",
+    "lexar": "lexar",
     "lenovo": "lenovo",
+    "lian": "lian li",
+    "lian li": "lian li",
+    "lianli": "lian li",
+    "logitech": "logitech",
+    "maxsun": "maxsun",
     "msi": "msi",
+    "montech": "montech",
     "nzxt": "nzxt",
+    "palit": "palit",
+    "patriot": "patriot",
+    "phanteks": "phanteks",
+    "pny": "pny",
+    "powercolor": "powercolor",
+    "razer": "razer",
+    "redragon": "redragon",
+    "samsung": "samsung",
     "sapphire": "sapphire",
     "seasonic": "seasonic",
+    "silicon power": "silicon power",
+    "siliconpower": "silicon power",
+    "silver stone": "silver stone",
+    "silverstone": "silver stone",
+    "team": "team",
+    "teamgroup": "team",
+    "thermaltake": "thermaltake",
     "wd": "wd",
     "western digital": "wd",
+    "xigmatek": "xigmatek",
+    "xpg": "xpg",
+    "zotac": "zotac",
 }
 
 # Tokens that variants append to a model code. They must remain part of the
@@ -246,29 +296,151 @@ def detected_brand(text: str | None) -> str:
 def infer_category(text: str | None) -> ProductCategory | None:
     """Best-effort category hint used only as a hard gate when confident."""
     value = normalize(text)
-    if any(word in value.split() for word in ("laptop", "notebook")) or "legion" in value:
+    strong_prebuilt_markers = (
+        "prebuilt",
+        "pre built",
+        "gaming desktop",
+        "all in one pc",
+        "all in one desktop",
+    )
+    component_phrases = (
+        "desktop ram",
+        "desktop memory",
+        "desktop computer memory",
+        "desktop pc gpu",
+        "desktop pc case",
+        "desktop processor",
+        "desktop cpu",
+        "desktop motherboard",
+        "desktop cooler",
+    )
+    if (
+        any(marker in value for marker in strong_prebuilt_markers)
+        and not any(phrase in value for phrase in component_phrases)
+        and not any(
+            marker in value for marker in ("processor", "cpu", "motherboard", "cooler")
+        )
+    ):
+        return ProductCategory.PREBUILT
+    # "Desktop PC/Computer" also appears in component titles, so require a
+    # system-level CPU/GPU indicator and exclude component nouns.
+    if (
+        "desktop" in value
+        and not any(
+            marker in value
+            for marker in (
+                "case",
+                "processor",
+                "cpu",
+                "ram",
+                "memory",
+                "dimm",
+                "motherboard",
+                "cooler",
+                "gpu",
+                "graphics card",
+            )
+        )
+        and any(
+            marker in value
+            for marker in (
+                "core i",
+                "core ultra",
+                "intel core",
+                "ryzen",
+                "geforce",
+                "rtx",
+                "radeon",
+                "win11",
+                "windows 11",
+            )
+        )
+    ):
+        return ProductCategory.PREBUILT
+    # Bundles contain several components, so they must never be mistaken for a
+    # single GPU/CPU by a word such as "geforce" or "ryzen" later in the title.
+    bundle_markers = ("bundle", "combo", "powered by")
+    component_markers = (
+        "processor",
+        "ryzen",
+        "core i",
+        "motherboard",
+        "geforce",
+        "radeon",
+        "power supply",
+    )
+    component_hits = sum(marker in value for marker in component_markers)
+    if (
+        any(marker in value for marker in bundle_markers)
+        and component_hits >= 2
+        and "motherboard" not in value
+    ):
+        return ProductCategory.PREBUILT
+    laptop_markers = (
+        "legion",
+        "loq",
+        "ideapad",
+        "thinkpad",
+        "vivobook",
+        "zenbook",
+        "pavilion",
+        "elitebook",
+        "probook",
+        "chromebook",
+        "omen",
+        "victus",
+        "inspiron",
+        "vostro",
+        "latitude",
+        "xps",
+        "tuf gaming a",
+        "tuf gaming f",
+        "rog ally",
+        "windows 11",
+        "win11",
+        "15 inch",
+        "16 inch",
+        "15 6 inch",
+    )
+    if (
+        "laptop" in value.split()
+        or "notebook" in value.split()
+        or any(marker in value for marker in laptop_markers)
+    ):
         return ProductCategory.LAPTOP
     if (
         "graphics card" in value
         or "geforce" in value
         or "radeon" in value
-        or re.search(r"\b(?:rtx|rx|gpu)\b", value)
+        or re.search(r"\b(?:rtx|rx)\b", value)
     ):
         return ProductCategory.GPU
+    if "motherboard" in value or re.search(
+        r"\b(?:b550|b650|b760|b850|x670|x870|z690|z790|z890)\w*\b", value
+    ):
+        return ProductCategory.MOTHERBOARD
     if any(
         word in value for word in ("processor", "cpu", "ryzen", "threadripper", "core i")
     ):
         return ProductCategory.CPU
-    if "motherboard" in value or re.search(r"\b(?:b650|b550|x670|z790|z690)\w*\b", value):
-        return ProductCategory.MOTHERBOARD
     if "ddr5" in value or "ddr4" in value or "memory" in value:
         return ProductCategory.RAM
     if "power supply" in value or re.search(r"\b\d{3,4}w\b", value):
         return ProductCategory.PSU
-    if "nvme" in value or "ssd" in value or "m 2" in value:
+    if "nvme" in value or "ssd" in value or "m 2" in value or "hard drive" in value:
         return ProductCategory.STORAGE
-    if "tower" in value or "computer case" in value:
+    case_word = "case" in value.split()
+    if (
+        ("tower" in value and "cooler" not in value)
+        or "computer case" in value
+        or "chassis" in value
+        or (case_word and "fan" not in value.split())
+    ):
         return ProductCategory.CASE
+    if "cooler" in value or "liquid cooling" in value or " aio" in value:
+        return ProductCategory.COOLER
+    if any(word in value.split() for word in ("keyboard", "mouse", "monitor", "headset")):
+        return ProductCategory.PERIPHERAL
     return None
 
 
