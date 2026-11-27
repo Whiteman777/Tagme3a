@@ -46,26 +46,26 @@ MERCHANTS: list[MerchantRead] = [
         key="nekhely",
         name="El-Nekhely Technology",
         name_ar="النخلي للتكنولوجيا",
-        base_url="https://elnekhely.com",
+        base_url="https://www.elnekhelytechnology.com",
         is_active=True,
     ),
     MerchantRead(
         id=4,
-        key="amazon_eg",
-        name="Amazon.eg",
-        name_ar="أمازون مصر",
-        base_url="https://amazon.eg",
+        key="2b",
+        name="2B",
+        name_ar="توبي",
+        base_url="https://2b.com.eg",
         is_active=True,
     ),
 ]
 
-# Multipliers produce distinct EGP prices per merchant. Amazon is deliberately
-# out of stock so the eligibility gate in pricing.py is exercised by the mock.
+# Multipliers produce distinct EGP prices per merchant. 2B is deliberately out
+# of stock so the eligibility gate in pricing.py is exercised by the mock.
 MERCHANT_MULTIPLIERS: tuple[tuple[str, float], ...] = (
     ("sigma", 1.0),
     ("compumarts", 1.045),
     ("nekhely", 1.02),
-    ("amazon_eg", 1.075),
+    ("2b", 1.075),
 )
 
 CATALOG: list[CatalogEntry] = [
@@ -272,7 +272,7 @@ def build_catalog() -> tuple[list[MockProduct], dict[int, list[PricePoint]]]:
                 id=offer_id,
                 url=f"{merchant.base_url}/products/{entry.slug}",
                 price_egp=price,
-                in_stock=merchant_key != "amazon_eg",
+                in_stock=merchant_key != "2b",
                 match_confidence=Decimal("0.97"),
                 last_seen_at=datetime.now(UTC),
                 merchant=merchant,

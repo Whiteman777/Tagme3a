@@ -101,7 +101,7 @@ async def test_detail_ranks_eligible_offers_and_includes_history(client: AsyncCl
 
     in_stock_prices = [Decimal(o["price_egp"]) for o in body["offers"] if o["in_stock"]]
     assert in_stock_prices == sorted(in_stock_prices)
-    assert body["offers"][-1]["merchant"]["key"] == "amazon_eg"  # out of stock -> ineligible
+    assert body["offers"][-1]["merchant"]["key"] == "2b"  # out of stock -> ineligible
     assert body["merchant_count"] == 3
     assert len(body["price_history"]) == 12
 
@@ -109,7 +109,7 @@ async def test_detail_ranks_eligible_offers_and_includes_history(client: AsyncCl
 async def test_merchants_and_price_history_endpoints(client: AsyncClient) -> None:
     merchants = await client.get("/api/v1/products/merchants")
     assert merchants.status_code == 200
-    assert [m["key"] for m in merchants.json()] == ["sigma", "compumarts", "nekhely", "amazon_eg"]
+    assert [m["key"] for m in merchants.json()] == ["sigma", "compumarts", "nekhely", "2b"]
 
     history = await client.get("/api/v1/products/1/price-history", params={"limit": 5})
     assert history.status_code == 200

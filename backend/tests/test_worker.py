@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from typing import Any
 
+from app.models.catalog import Merchant
 from app.models.scraping import RunStatus
 from app.workers import WorkerSettings, tasks
 
@@ -20,6 +21,20 @@ async def test_scrape_all_skips_unregistered_and_isolates_failures(
 ) -> None:
     called: list[str] = []
 
+    async def _add_legacy_merchant() -> None:
+        async with session_factory() as session:
+            session.add(
+                Merchant(
+                    key="legacy",
+                    name="Legacy",
+                    base_url="https://legacy.example",
+                    adapter_key="legacy",
+                )
+            )
+            await session.commit()
+
+    await _add_legacy_merchant()
+
     async def fake_run_merchant(db: Any, key: str, **kwargs: Any) -> SimpleNamespace:
         called.append(key)
         if key == "sigma":
@@ -35,7 +50,7 @@ async def test_scrape_all_skips_unregistered_and_isolates_failures(
 
     result = await tasks.scrape_all({})
 
-    assert set(called) == {"sigma", "compumarts"}  # nekhely/amazon_eg have no adapter
+    assert set(called) == {"sigma", "compumarts", "nekhely", "2b"}  # legacy has no adapter
     assert result["runs"]["sigma"] == "error: boom"
     assert result["runs"]["compumarts"] == "partial"
     assert result["offers"] == {"offers_updated": 3}

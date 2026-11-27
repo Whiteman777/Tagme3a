@@ -41,8 +41,9 @@ async def run_merchant(
 
     Passing ``html`` skips all network I/O and stages a single snapshot, which
     keeps the pipeline testable and lets operators reparse a retained snapshot.
-    Live runs iterate ``scraper.listing_urls()`` so an adapter can cover several
-    public pages (Sigma uses a category plus component searches).
+    Live runs iterate ``scraper.listing_urls()`` and any page URLs discovered in
+    fetched HTML, so an adapter can cover several public pages without hardcoding
+    every page number. ``html=`` mode remains a single-page, network-free path.
     """
     merchant = await db.scalar(select(Merchant).where(Merchant.key == merchant_key))
     if merchant is None or not merchant.is_active:
@@ -67,6 +68,12 @@ async def run_merchant(
     else:
         targets = scraper.listing_urls()
 
+    # Pages can be discovered from the HTML of earlier pages (Shopify pagination
+    # links, Sigma's server-rendered page count). Process a queue instead of a
+    # fixed list, with a seen-set so a broken page cannot create a fetch loop.
+    pending = list(targets)
+    seen_targets: set[str] = set()
+
     own_client = html is None and client is None
     http = client or (
         httpx.AsyncClient(timeout=settings.SCRAPER_TIMEOUT_SECONDS, follow_redirects=True)
@@ -80,7 +87,11 @@ async def run_merchant(
     failures: list[str] = []
 
     try:
-        for target in targets:
+        while pending:
+            target = pending.pop(0)
+            if target in seen_targets:
+                continue
+            seen_targets.add(target)
             try:
                 if html is not None:
                     fetched = FetchResult(
@@ -99,6 +110,11 @@ async def run_merchant(
                     "scrape_fetch_failed", merchant=merchant_key, url=target, error=str(exc)
                 )
                 continue
+
+            if html is None:
+                for extra in scraper.additional_pages(fetched.html, url=fetched.url):
+                    if extra not in seen_targets:
+                        pending.append(extra)
 
             existing = await db.scalar(
                 select(RawSnapshot).where(
@@ -218,7 +234,7 @@ async def run_merchant(
     logger.info(
         "scrape_staged",
         merchant=merchant_key,
-        pages=len(targets),
+        pages=len(seen_targets),
         snapshots=snapshots_new,
         listings=total_found,
         matched=total_matched,

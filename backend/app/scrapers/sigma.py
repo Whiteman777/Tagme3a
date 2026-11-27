@@ -6,6 +6,7 @@ container that shows ``Out Of Stock`` when needed. Parsing those cards keeps the
 adapter independent of the site's internal API (which robots.txt disallows).
 """
 
+import re
 from decimal import Decimal
 from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
 
@@ -40,6 +41,10 @@ class SigmaScraper(BaseScraper):
         "ssd",
         "power supply",
     )
+    # Search pages report hundreds of pages; only the first few are useful for
+    # catalog tracking, and each extra page is a separate robots-checked fetch.
+    max_pages: int = 3
+    _TOTAL_PAGES_RE = re.compile(r'\\"totalPages\\":(\d+)|"totalPages"\s*:\s*(\d+)')
 
     # Fallback for older saved snapshots that used simple product cards.
     selectors = Selectors(
@@ -56,12 +61,31 @@ class SigmaScraper(BaseScraper):
             f"{self.base_url}/en/search?{urlencode({'q': query})}" for query in self.search_queries
         ]
 
+    def additional_pages(self, html: str, *, url: str) -> list[str]:
+        """Follow the server-rendered ``totalPages`` hint, capped per seed URL."""
+        match = self._TOTAL_PAGES_RE.search(html)
+        if match is None:
+            return []
+        total = int(match.group(1) or match.group(2))
+        try:
+            current = int(parse_qs(urlparse(url).query).get("page", ["1"])[0])
+        except ValueError:
+            current = 1
+        last = min(total, self.max_pages)
+        return [self.page_url(url, page) for page in range(current + 1, last + 1)]
+
     def parse(self, html: str, *, url: str) -> list[ScrapedListing]:
         page_url = url or self.listings_url
         listings = self._parse_product_cards(html, page_url=page_url)
         if listings:
             return listings
-        return parse_cards(html, self.selectors, base_url=self.base_url, page_url=page_url)
+        return parse_cards(
+            html,
+            self.selectors,
+            base_url=self.base_url,
+            page_url=page_url,
+            min_price_egp=self.min_price_egp,
+        )
 
     @staticmethod
     def _card_for(anchor):

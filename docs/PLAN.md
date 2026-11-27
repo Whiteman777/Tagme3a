@@ -18,7 +18,7 @@ tagme3a/
 │   │   ├── models/               # SQLAlchemy 2.0 ORM
 │   │   ├── schemas/              # Pydantic v2
 │   │   ├── services/             # matcher, compatibility, recommender, pricing, text_gen
-│   │   ├── scrapers/             # base.py + sigma.py, compumarts.py, nekhely.py
+│   │   ├── scrapers/             # base.py + sigma.py, compumarts.py, nekhely.py, twob.py
 │   │   ├── workers/              # arq tasks + scheduler
 │   │   └── data/                 # seed data: cpus, gpus, sockets, compat matrix
 │   ├── alembic/
@@ -181,13 +181,14 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 - **Exit:** daily prices flowing for 2 merchants; price history available via API.
 
 > **Status (2026-11-27):** implemented on `backend` (runbook: `backend/M2.md`).
-> Raw snapshots, staging, run health, Sigma/Compumarts adapters with fixture tests,
-> arq daily cron (02:00 UTC scrape, 02:30 UTC ghost recompute), admin review queue,
-> scraper health and manual enqueue are in place. Live selectors still need tuning
-> against real merchant HTML; reviewer-role enforcement and fuzzy/pgvector matching
-> remain in M3. Both Sigma and Compumarts selectors are now tuned against real
-> server-rendered pages (`backend/M2.md`); full Web Bot Auth for Compumarts
-> remains a production TODO.
+> Raw snapshots, staging, run health, four adapters (Sigma, Compumarts, Nekhely,
+> 2B) with real-HTML fixture tests, arq daily cron (02:00 UTC scrape, 02:30 UTC
+> ghost recompute), admin review queue, scraper health and manual enqueue are in
+> place. All four selectors are tuned against real server-rendered pages and page
+> links are discovered dynamically with per-adapter caps. Amazon.eg is excluded
+> (ToS bans automated price collection) and replaced by 2B; the parked
+> `elnekhely.com` seed was retargeted to `elnekhelytechnology.com`. Full Web Bot
+> Auth for Compumarts remains a production TODO.
 
 ### M3 — Normalization & Matcher
 
@@ -196,15 +197,15 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 - **Exit:** ≥90% auto-match on target merchants; low-confidence queued.
 
 > **Status (2026-11-27):** implemented on `backend` (runbook: `backend/M3.md`).
-> Normalization, model-identity/capacity/brand/bundle hard gates, rapidfuzz
-> scoring, reviewer-learned aliases, low-confidence suggestions and reviewer-role
-> enforcement are in place; health and manual scrape remain admin-only. Migration
-> `0003` adds aliases and suggestions plus opportunistic pgvector embedding
-> storage. Live smoke showed 14/14 audited auto-matches correct; the raw rate on
-> broad merchant pages is lower because the 15-SKU development catalog does not
-> cover most listed products. Full Docker stack verified pgvector, Meilisearch
-> indexing and on-demand arq execution; Web Bot Auth and real Firebase token
-> verification remain pending.
+> Normalization, model-identity/capacity/DDR-speed/brand/variant/bundle hard gates,
+> rapidfuzz scoring, reviewer-learned aliases, low-confidence suggestions and
+> reviewer-role enforcement are in place; health and manual scrape remain
+> admin-only. Migration `0003` adds aliases and suggestions plus opportunistic
+> pgvector embedding storage. The four-merchant Docker smoke showed 22/22 audited
+> auto-matches correct; the raw rate (22/3,064) is lower because the 15-SKU
+> development catalog does not cover most listed products. Full Docker stack
+> verified pgvector, Meilisearch indexing and on-demand arq execution; Web Bot
+> Auth and real Firebase token verification remain pending.
 
 ### M4 — PC Builder
 

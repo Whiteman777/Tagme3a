@@ -6,7 +6,7 @@ reads public collection HTML; cart/checkout and AJAX surfaces are off-limits.
 """
 
 from decimal import Decimal
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -37,7 +37,8 @@ class CompumartsScraper(BaseScraper):
         "pc-parts-computer-cases",
         "prebuilt-desktop-pcs",
     )
-    max_pages: int = 3
+    # Shopify publishes the last page in the collection's pagination links.
+    max_pages: int = 14
 
     # Fallback for older saved snapshots that used simple product cards.
     selectors = Selectors(
@@ -51,17 +52,44 @@ class CompumartsScraper(BaseScraper):
 
     def listing_urls(self) -> list[str]:
         return [
-            f"{self.base_url}/collections/{handle}?page={page}"
-            for handle in self.collection_handles
-            for page in range(1, self.max_pages + 1)
+            f"{self.base_url}/collections/{handle}?page=1" for handle in self.collection_handles
         ]
+
+    def additional_pages(self, html: str, *, url: str) -> list[str]:
+        """Read last-page links from Shopify's pagination nav (never the JSON API)."""
+        document = LexborHTMLParser(html)
+        current_path = urlparse(url).path
+        try:
+            current = int(parse_qs(urlparse(url).query).get("page", ["1"])[0])
+        except ValueError:
+            current = 1
+
+        found: dict[int, str] = {}
+        for link in document.css("a.pagination__page-link[href]"):
+            href = link.attributes.get("href", "")
+            parsed = urlparse(href)
+            if parsed.path != current_path:
+                continue
+            try:
+                page = int(parse_qs(parsed.query).get("page", [""])[0])
+            except ValueError:
+                continue
+            if current < page <= self.max_pages:
+                found[page] = urljoin(url, href)
+        return [found[page] for page in sorted(found)]
 
     def parse(self, html: str, *, url: str) -> list[ScrapedListing]:
         page_url = url or self.listings_url
         listings = self._parse_cards(html, page_url=page_url)
         if listings:
             return listings
-        return parse_cards(html, self.selectors, base_url=self.base_url, page_url=page_url)
+        return parse_cards(
+            html,
+            self.selectors,
+            base_url=self.base_url,
+            page_url=page_url,
+            min_price_egp=self.min_price_egp,
+        )
 
     def _parse_cards(self, html: str, *, page_url: str) -> list[ScrapedListing]:
         document = LexborHTMLParser(html)

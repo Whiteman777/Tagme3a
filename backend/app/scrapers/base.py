@@ -9,7 +9,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urljoin, urlparse
+from email.utils import parsedate_to_datetime
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -100,7 +101,12 @@ class Selectors:
 
 
 def parse_cards(
-    html: str, selectors: Selectors, *, base_url: str, page_url: str
+    html: str,
+    selectors: Selectors,
+    *,
+    base_url: str,
+    page_url: str,
+    min_price_egp: Decimal = Decimal("1"),
 ) -> list[ScrapedListing]:
     """Parse listing cards. Bad cards are skipped so one broken row cannot fail a batch."""
     document = LexborHTMLParser(html)
@@ -114,7 +120,7 @@ def parse_cards(
 
         title = title_node.text(strip=True)
         price = parse_price_egp(price_node.text(strip=True))
-        if not title or price is None:
+        if not title or price is None or price < min_price_egp:
             continue
 
         link_node = card.css_first(selectors.link)
@@ -149,6 +155,10 @@ class BaseScraper(ABC):
     listings_url: str = ""
     user_agents: tuple[str, ...] = ()
     min_price_egp: Decimal = Decimal("1")
+    # Upper bound per seed URL so a broken/misleading page-count never causes an
+    # unbounded crawl. Adapters override this when their real pages justify it.
+    max_pages: int = 1
+    max_retry_delay_seconds: float = 60.0
 
     def __init__(
         self,
@@ -170,8 +180,41 @@ class BaseScraper(ABC):
         self._robots: dict[str, RobotFileParser | None] = {}
 
     def listing_urls(self) -> list[str]:
-        """Public pages to scrape for this merchant (one by default)."""
+        """Public seed pages to scrape for this merchant (one by default)."""
         return [self.listings_url]
+
+    def additional_pages(self, html: str, *, url: str) -> list[str]:
+        """Discover follow-up pages from a seed page's HTML.
+
+        Default is no pagination. Adapters return only public listing URLs they
+        can justify from the fetched document; the ingestion loop dedupes them
+        and applies ``max_pages`` as a safety cap.
+        """
+        return []
+
+    @staticmethod
+    def page_url(url: str, page: int) -> str:
+        """Replace (or add) the ``page`` query parameter on a listing URL."""
+        parsed = urlparse(url)
+        query = [(key, value) for key, value in parse_qsl(parsed.query) if key != "page"]
+        query.append(("page", str(page)))
+        return f"{parsed._replace(query=urlencode(query)).geturl()}"
+
+    @staticmethod
+    def retry_after_seconds(value: str | None) -> float | None:
+        """Parse Retry-After (delta-seconds or HTTP date) into a delay."""
+        if not value:
+            return None
+        value = value.strip()
+        if value.isdigit():
+            return float(value)
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        return max(0.0, (when - datetime.now(UTC)).total_seconds())
 
     @abstractmethod
     def parse(self, html: str, *, url: str) -> list[ScrapedListing]:
@@ -217,6 +260,17 @@ class BaseScraper(ABC):
         for attempt in range(self.max_retries + 1):
             try:
                 response = await client.get(url, headers={"User-Agent": next(self._agents)})
+                # agents.md asks bots to back off on 429 and honor Retry-After.
+                if response.status_code in (429, 503) and attempt < self.max_retries:
+                    delay = self.retry_after_seconds(response.headers.get("Retry-After"))
+                    if delay is None:
+                        delay = 0.5 * 2**attempt
+                    last_error = RuntimeError(f"HTTP {response.status_code} from {url}")
+                    logger.warning(
+                        "scrape_backoff", merchant=self.key, url=url, status=response.status_code
+                    )
+                    await asyncio.sleep(min(delay, self.max_retry_delay_seconds))
+                    continue
                 response.raise_for_status()
                 return FetchResult(
                     url=str(response.url),

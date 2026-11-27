@@ -2,10 +2,13 @@
 
 from app.scrapers.base import BaseScraper
 from app.scrapers.compumarts import CompumartsScraper
+from app.scrapers.nekhely import NekhelyScraper
 from app.scrapers.sigma import SigmaScraper
+from app.scrapers.twob import TwoBScraper
 
 SCRAPERS: dict[str, type[BaseScraper]] = {
-    scraper.key: scraper for scraper in (SigmaScraper, CompumartsScraper)
+    scraper.key: scraper
+    for scraper in (SigmaScraper, CompumartsScraper, NekhelyScraper, TwoBScraper)
 }
 
 

@@ -25,6 +25,7 @@ def test_normalization_splits_codes_and_drops_marketing_noise() -> None:
     )
     assert model_codes("AMD Ryzen 5 7600X3D Processor") == frozenset({"7600x3d"})
     assert model_codes("Core i5-14600KF") == frozenset({"14600kf"})
+    assert canonical_text("Intel® Core™ i5 processor 14600KF") == "intel core i5 14600kf"
 
 
 def test_embedding_is_deterministic_and_normalized() -> None:
@@ -91,6 +92,53 @@ async def test_similar_titles_are_not_false_positives(
     assert result.status == MatchStatus.UNMATCHED
     assert result.product is None
     assert result.suggestion is None or result.suggestion.slug != wrong_slug
+
+
+@pytest.mark.parametrize(
+    ("title", "wrong_slug"),
+    [
+        (
+            "G.Skill Trident Z5 RGB Series 64GB (2 x 32GB) DDR5 6000 MHz Memory Kit",
+            "ddr5-32g-6000",
+        ),
+        (
+            "G.Skill Trident Z5 Royal Neo RGB 32GB Kit (2x16GB) DDR5 8000MT/s CL38",
+            "ddr5-32g-6000",
+        ),
+        (
+            "Sapphire Pure AMD Radeon RX 7800 XT Gaming Graphics Card 16GB GDDR6",
+            "rx-7800-xt",
+        ),
+        ("GIGABYTE GeForce RTX 4060 GAMING OC 8G GRAPHIC CARD", "rtx-4060-windforce"),
+        ("MSI Gaming RTX 4070 Super 12G Gaming X Slim Graphics Card", "rtx-4070-super"),
+    ],
+)
+async def test_capacity_speed_and_variant_conflicts_are_not_auto_matched(
+    db: AsyncSession, seeded: None, title: str, wrong_slug: str
+) -> None:
+    result = await match_listing(db, title)
+
+    assert result.status == MatchStatus.UNMATCHED
+    assert result.product is None
+    assert result.suggestion is None or result.suggestion.slug != wrong_slug
+
+
+async def test_trademark_marks_do_not_break_auto_matching(
+    db: AsyncSession, seeded: None
+) -> None:
+    result = await match_listing(db, "Intel® Core™ i5 processor 14600KF", brand="Intel")
+
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.product is not None and result.product.slug == "intel-i5-14600kf"
+
+
+async def test_exact_capacity_kit_auto_matches(db: AsyncSession, seeded: None) -> None:
+    result = await match_listing(
+        db, "G.SKILL Trident Z5 Neo RGB DDR5 32GB (2x16GB) 6000MT/s CL30"
+    )
+
+    assert result.status == MatchStatus.AUTO_MATCHED
+    assert result.product is not None and result.product.slug == "ddr5-32g-6000"
 
 
 async def test_bundle_listing_is_never_auto_matched(db: AsyncSession, seeded: None) -> None:

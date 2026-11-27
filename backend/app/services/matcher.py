@@ -32,6 +32,8 @@ _LETTER_RE = re.compile(r"^[a-z]{1,3}$")
 _NUMBER_RE = re.compile(r"^\d{2,5}$")
 _SHORT_MODEL_RE = re.compile(r"^(?=[a-z0-9]*\d)[a-z]{1,3}\d{1,4}[a-z]?$")
 _CAPACITY_RE = re.compile(r"\b(\d{1,3})\s?(gb|tb|g)\b")
+_MEMORY_SPEED_RE = re.compile(r"\b(\d{4,5})\s*(?:mt\s*s?|mhz)\b")
+_BARE_SPEED_RE = re.compile(r"(?<!\d)(\d{4,5})(?!\d)")
 _BUNDLE_RE = re.compile(r"\b(?:build|combo)\b|powered by")
 
 _NOISE = frozenset(
@@ -112,10 +114,12 @@ def normalize(text: str | None) -> str:
     """Lowercase, de-accent and tokenize an AR/EN merchant title."""
     if not text:
         return ""
-    value = unicodedata.normalize("NFKD", text)
+    # Drop trademark marks before NFKD: it decomposes "™" into "TM", which
+    # would otherwise glue onto the preceding word ("Core™" -> "coretm").
+    value = text.replace("™", " ").replace("®", " ").replace("٬", "").replace("٫", ".")
+    value = unicodedata.normalize("NFKD", value)
     value = "".join(char for char in value if not unicodedata.combining(char))
     value = value.translate(_ARABIC_DIGITS)
-    value = value.replace("™", " ").replace("®", " ").replace("٬", "").replace("٫", ".")
     value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
     return re.sub(r"\s+", " ", value).strip()
 
@@ -174,11 +178,46 @@ def specific_identity(text: str | None) -> frozenset[str]:
     return frozenset(token for token in identity_tokens(text) if any(c.isalpha() for c in token))
 
 
+def _capacity_gb(amount: str, unit: str) -> str:
+    return f"{int(amount) * 1024 if unit == 'tb' else int(amount)}gb"
+
+
 def capacity_tokens(text: str | None) -> frozenset[str]:
     """Normalize memory/storage capacities so 16 GB never matches 64 GB."""
     return frozenset(
-        f"{int(amount) * 1024 if unit == 'tb' else int(amount)}gb"
-        for amount, unit in _CAPACITY_RE.findall(normalize(text))
+        _capacity_gb(amount, unit) for amount, unit in _CAPACITY_RE.findall(normalize(text))
+    )
+
+
+def primary_capacity(text: str | None) -> str | None:
+    """The headline capacity, which distinguishes a 64 GB kit from its 32 GB sticks."""
+    match = _CAPACITY_RE.search(normalize(text))
+    return _capacity_gb(*match.groups()) if match else None
+
+
+def memory_speed_tokens(text: str | None) -> frozenset[str]:
+    """DDR speed in MT/s or MHz; only compared when both sides state one."""
+    value = normalize(text)
+    explicit = _MEMORY_SPEED_RE.findall(value)
+    if explicit:
+        return frozenset(explicit)
+    if re.search(r"\b(?:ddr[456]|memory|ram)\b", value):
+        return frozenset(_BARE_SPEED_RE.findall(value))
+    return frozenset()
+
+
+def distinctive_tokens(text: str | None) -> frozenset[str]:
+    """Variant words such as ``windforce`` or ``pulse`` that identify a SKU."""
+    return frozenset(
+        token
+        for token in canonical_text(text).split()
+        if len(token) >= 3
+        and token.isalpha()
+        and token not in _NOISE
+        and token not in _GENERIC_TOKENS
+        and token not in _FAMILY_PREFIXES
+        and token not in _SERIES_TOKENS
+        and token not in _MODEL_SUFFIXES
     )
 
 
@@ -277,6 +316,8 @@ def _gates_pass(
     listing_identity: frozenset[str],
     listing_specific: frozenset[str],
     listing_capacity: frozenset[str],
+    listing_primary_capacity: str | None,
+    listing_speed: frozenset[str],
     listing_brand: str,
     listing_category: ProductCategory | None,
 ) -> bool:
@@ -290,6 +331,12 @@ def _gates_pass(
         return False
     product_capacity = capacity_tokens(product_text)
     if listing_capacity and product_capacity and listing_capacity.isdisjoint(product_capacity):
+        return False
+    product_primary = primary_capacity(product_text)
+    if listing_primary_capacity and product_primary and listing_primary_capacity != product_primary:
+        return False
+    product_speed = memory_speed_tokens(product_text)
+    if listing_speed and product_speed and listing_speed.isdisjoint(product_speed):
         return False
     product_brand = normalized_brand(product.brand)
     if listing_brand and product_brand and listing_brand != product_brand:
@@ -398,6 +445,8 @@ async def match_listing(
     listing_identity = identity_tokens(raw)
     listing_specific = specific_identity(raw)
     listing_capacity = capacity_tokens(raw)
+    listing_primary_capacity = primary_capacity(raw)
+    listing_speed = memory_speed_tokens(raw)
     listing_signal = _signal_tokens(raw)
     listing_brand = normalized_brand(brand) or detected_brand(raw)
     listing_category = category or infer_category(raw)
@@ -420,6 +469,8 @@ async def match_listing(
             listing_identity=listing_identity,
             listing_specific=listing_specific,
             listing_capacity=listing_capacity,
+            listing_primary_capacity=listing_primary_capacity,
+            listing_speed=listing_speed,
             listing_brand=listing_brand,
             listing_category=listing_category,
         ):
@@ -429,11 +480,14 @@ async def match_listing(
         product_signal = _signal_tokens(" ".join(candidate_texts))
         if listing_signal and product_signal and listing_signal.isdisjoint(product_signal):
             continue
+        variants = distinctive_tokens(product.model)
 
         score, reason = Decimal("0"), ""
         for candidate_text in candidate_texts:
             candidate_identity = identity_tokens(candidate_text)
             is_alias = candidate_text in aliases[product.id]
+            if not is_alias and variants and listing_signal.isdisjoint(variants):
+                continue
             if candidate_identity:
                 if listing_identity and candidate_identity.isdisjoint(listing_identity):
                     continue

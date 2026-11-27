@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import AsyncSessionLocal
@@ -15,8 +15,15 @@ from app.services.search import search_service
 MERCHANTS = [
     ("sigma", "Sigma Computer", "سيجما كمبيوتر", "https://sigma-computer.com", "sigma"),
     ("compumarts", "Compumarts", "كومبيومارتس", "https://www.compumarts.com", "compumarts"),
-    ("nekhely", "El-Nekhely Technology", "النخلي للتكنولوجيا", "https://elnekhely.com", "nekhely"),
-    ("amazon_eg", "Amazon.eg", "أمازون مصر", "https://amazon.eg", "amazon_eg"),
+    # elnekhely.com is a parked domain; the live store uses a different domain.
+    (
+        "nekhely",
+        "El-Nekhely Technology",
+        "النخلي للتكنولوجيا",
+        "https://www.elnekhelytechnology.com",
+        "nekhely",
+    ),
+    ("2b", "2B", "توبي", "https://2b.com.eg", "2b"),
 ]
 
 PRODUCTS = [
@@ -122,7 +129,7 @@ MARKET_MULTIPLIERS = [
     ("sigma", 1.0),
     ("compumarts", 1.045),
     ("nekhely", 1.02),
-    ("amazon_eg", 1.075),
+    ("2b", 1.05),
 ]
 
 
@@ -142,6 +149,17 @@ async def seed(db: AsyncSession) -> None:
             db.add(merchant)
             await db.flush()
         merchants[key] = merchant
+
+    # Retired merchants (e.g. the legally barred Amazon.eg) must not keep
+    # contributing live-looking offers to a database seeded earlier.
+    active_keys = set(merchants)
+    for stale in (
+        await db.scalars(select(Merchant).where(Merchant.key.not_in(list(active_keys))))
+    ).all():
+        stale.is_active = False
+        await db.execute(
+            update(Offer).where(Offer.merchant_id == stale.id).values(in_stock=False)
+        )
 
     created_products: list[Product] = []
     for slug, category, brand, model, name, name_ar, specs in PRODUCTS:
@@ -178,7 +196,7 @@ async def seed(db: AsyncSession) -> None:
                 merchant_id=merchants[mkey].id,
                 url=f"{merchants[mkey].base_url}/products/{slug}",
                 price_egp=price,
-                in_stock=mkey != "amazon_eg",
+                in_stock=True,
                 match_confidence=Decimal("0.97"),
                 last_seen_at=datetime.now(UTC),
             )
