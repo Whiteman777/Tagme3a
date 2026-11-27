@@ -1,12 +1,16 @@
 """Shared FastAPI dependencies."""
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
+from arq import create_pool
+from arq.connections import ArqRedis, RedisSettings
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole
@@ -54,3 +58,18 @@ async def get_current_admin(user: User = Depends(get_current_user)) -> User:
             detail="Administrator access required.",
         )
     return user
+
+
+async def get_arq_pool() -> AsyncGenerator[ArqRedis, None]:
+    """Yield a short-lived arq pool for enqueueing on-demand jobs."""
+    try:
+        pool = await create_pool(RedisSettings.from_dsn(str(settings.REDIS_URL)))
+    except Exception as exc:  # noqa: BLE001 - Redis is optional for reads, not for enqueueing
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Job queue is unavailable.",
+        ) from exc
+    try:
+        yield pool
+    finally:
+        await pool.close()

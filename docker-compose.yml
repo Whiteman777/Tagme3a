@@ -55,6 +55,21 @@ services:
              python -m app.services.seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
+  worker:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tagme3a:tagme3a@db:5432/tagme3a
+      REDIS_URL: redis://redis:6379/0
+      MEILI_URL: http://meilisearch:7700
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: arq app.workers.WorkerSettings
+
 volumes:
   pgdata:
   meilidata:

@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -11,6 +12,7 @@ from app.core.db import Base, get_db
 from app.core.security import decode_token
 from app.main import app
 from app.models import Merchant, Offer, PriceHistory, Product, User  # noqa: F401
+from app.models.user import UserRole
 
 TEST_UID = "test-firebase-uid"
 ADMIN_UID = "test-admin-uid"
@@ -67,6 +69,18 @@ async def client(session_factory, auth_uid: str):
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:
         yield http_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def admin_client(client: AsyncClient, db: AsyncSession, auth_uid: str) -> AsyncClient:
+    """Client whose Firebase identity maps to an admin user in Postgres."""
+    user = await db.scalar(select(User).where(User.firebase_uid == auth_uid))
+    if user is None:
+        db.add(User(firebase_uid=auth_uid, email="admin@example.com", role=UserRole.ADMIN))
+    else:
+        user.role = UserRole.ADMIN
+    await db.commit()
+    return client
 
 
 @pytest.fixture

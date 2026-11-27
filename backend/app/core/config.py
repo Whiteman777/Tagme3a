@@ -48,6 +48,9 @@ class Settings(BaseSettings):
         ]
     )
     STALE_AFTER_HOURS: int = 24
+    SCRAPE_CRON_HOUR: int = 2  # UTC (≈05:00 Cairo in summer, 04:00 in winter)
+    SCRAPE_CRON_MINUTE: int = 0
+    RECOMPUTE_CRON_MINUTE: int = 30
 
     # CORS
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])

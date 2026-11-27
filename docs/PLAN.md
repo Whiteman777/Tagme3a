@@ -180,6 +180,13 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 - Admin review queue (basic).
 - **Exit:** daily prices flowing for 2 merchants; price history available via API.
 
+> **Status (2026-11-27):** implemented on `backend` (runbook: `backend/M2.md`).
+> Raw snapshots, staging, run health, Sigma/Compumarts adapters with fixture tests,
+> arq daily cron (02:00 UTC scrape, 02:30 UTC ghost recompute), admin review queue,
+> scraper health and manual enqueue are in place. Live selectors still need tuning
+> against real merchant HTML; reviewer-role enforcement and fuzzy/pgvector matching
+> remain in M3.
+
 ### M3 — Normalization & Matcher
 
 - Canonical schema hardening, alias tables, rapidfuzz + pgvector matching,
