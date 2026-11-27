@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     # Path to a service-account JSON file, or the JSON content itself.
     FIREBASE_CREDENTIALS: str = ""
 
+    # Scraping
+    SCRAPER_DELAY_SECONDS: float = 1.0
+    SCRAPER_TIMEOUT_SECONDS: float = 15.0
+    SCRAPER_MAX_RETRIES: int = 2
+    SCRAPER_USER_AGENTS: list[str] = Field(
+        default_factory=lambda: [
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0",
+        ]
+    )
+    STALE_AFTER_HOURS: int = 24
+
     # CORS
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
 
