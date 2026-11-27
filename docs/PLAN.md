@@ -209,8 +209,8 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > auto-matches correct; the raw rate (22/3,064) is lower because the 15-SKU
 > development catalog does not cover most listed products. Full Docker stack
 > verified pgvector, Meilisearch indexing and on-demand arq execution. Real
-> Firebase verification has been exercised against the Auth emulator through
-> the real verifier (`backend/M3.md`); a live project token remains an owner step.
+> Firebase verification passed against both the Auth emulator and the live
+> `tagme3a` project via the real verifier (`backend/M3.md`).
 > SKU-curation reporting is in `backend/SKU_CURATION.md`, and alert webhook
 > wiring guidance is in `backend/OPS_WEBHOOKS.md`.
 

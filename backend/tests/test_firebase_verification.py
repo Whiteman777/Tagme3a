@@ -118,3 +118,55 @@ def test_emulator_script_initializes_app_before_creating_user(
     )
 
     assert calls == ["init", "create", "delete"]
+
+
+def test_live_test_user_mode_verifies_and_cleans_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    created_email: dict[str, str] = {}
+    monkeypatch.setenv("FIREBASE_WEB_API_KEY", "web-key")
+    monkeypatch.delenv("FIREBASE_AUTH_EMULATOR_HOST", raising=False)
+    monkeypatch.setattr(settings, "FIREBASE_PROJECT_ID", "tagme3a")
+    monkeypatch.setattr(verify_script, "_get_firebase_app", lambda: calls.append("init"))
+
+    def fake_create_user(**kwargs: Any) -> SimpleNamespace:
+        calls.append("create")
+        created_email["value"] = kwargs["email"]
+        return SimpleNamespace(uid="uid-1")
+
+    def fake_post(url: str, **kwargs: Any) -> httpx.Response:
+        calls.append("signin")
+        assert kwargs["params"] == {"key": "web-key"}
+        return httpx.Response(
+            200,
+            json={"idToken": "live-token"},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(firebase_admin.auth, "create_user", fake_create_user)
+    monkeypatch.setattr(
+        firebase_admin.auth,
+        "delete_user",
+        lambda uid: calls.append("delete"),
+    )
+    monkeypatch.setattr(verify_script.httpx, "post", fake_post)
+    monkeypatch.setattr(
+        verify_script,
+        "_decode",
+        lambda token: {"uid": "uid-1", "email": created_email["value"]},
+    )
+
+    verify_script._verify_with_test_user(argparse.Namespace(expected_uid=None))
+
+    assert calls == ["init", "create", "signin", "delete"]
+
+
+def test_live_test_user_mode_requires_web_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FIREBASE_WEB_API_KEY", raising=False)
+    monkeypatch.delenv("WEB_API_KEY", raising=False)
+
+    with pytest.raises(SystemExit, match="FIREBASE_WEB_API_KEY"):
+        verify_script._verify_with_test_user(argparse.Namespace(expected_uid=None))
