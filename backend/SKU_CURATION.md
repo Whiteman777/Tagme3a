@@ -1,11 +1,11 @@
 # SKU curation workflow
 
-Status: **broad candidate CSV + importer ready; owner review and DB import pending**.
+Status: **broad candidate CSV imported into the local dev DB; owner review and production import pending**.
 
 The deterministic matcher can only match products present in the curated catalog.
-With 15 development SKUs and 3,064 staged listings, most unmatched rows are
-genuinely out-of-catalog (7600X, 4070 Ti, 8000 MT/s kits, H7 Flow, other board
-vendors, 2B's laptop-heavy catalog) or bundles. Do not lower
+With the 15 development SKUs, the four-merchant baseline was 22 auto-matches from
+3,064 listings. After importing the broad candidate CSV into the local dev DB, one
+full re-scrape auto-matched 3,079 of 3,149 listings (97.8%). Do not lower
 `MATCH_AUTO_MIN=0.88` / `MATCH_REVIEW_MIN=0.72` to improve the raw rate: it would
 publish wrong prices.
 
@@ -57,8 +57,10 @@ from 130 pages / 3,149 listings / 3,042 title groups:
 | ram | 205 |
 | storage | 131 |
 
-Counts will drift as merchant pages change. This file is **review input**, not
-an approved catalog: confirm names, specs and aliases before import.
+Counts will drift as merchant pages change. This file was imported into the local
+development DB to measure match coverage, but it is still **review input**, not a
+production-approved catalog: confirm names, specs and aliases before production
+import.
 
 ## Add curated SKUs
 
@@ -97,8 +99,11 @@ When the list is approved, import it:
 uv run python -m scripts.import_curated_skus --file /path/to/skus.csv
 ```
 
-Existing slugs are skipped, so the importer is safe to re-run. The report itself
-needs Postgres; the importer's `--dry-run` validation does not.
+Existing slugs are skipped, so the importer is safe to re-run. Aliases that
+normalize to the same text are deduplicated before insert, so merchant title
+variants differing only by punctuation cannot violate the alias uniqueness
+constraint. The report itself needs Postgres; the importer's `--dry-run`
+validation does not.
 
 ## Curation steps
 
@@ -111,11 +116,38 @@ needs Postgres; the importer's `--dry-run` validation does not.
    listings. Manual `MATCHED`/`REJECTED` decisions are preserved.
 5. Track the auto-match count before/after in `M3.md`'s verification section.
 
+### Local verification (2026-11-28)
+
+The broad CSV was imported into a temporary local Postgres instance and followed
+by one complete `scrape_all` run:
+
+```text
+import:  created=2998  skipped=0  aliases_added=3087
+scrape:  130 pages / 3,149 listings / 3,079 auto-matched (97.8%)
+recompute: offers_created=2765  offers_updated=225  history_added=2971  ghosts=0
+```
+
+Per merchant, using listing counts from the run logs:
+
+| Merchant | Auto-matched / listings | Rate |
+|---|---:|---:|
+| Compumarts | 1,989 / 1,992 | 99.8% |
+| Nekhely | 432 / 433 | 99.8% |
+| Sigma | 438 / 459 | 95.4% |
+| 2B | 220 / 265 | 83.0% |
+
+Final DB counts were 3,013 products, 3,087 aliases, 130 snapshots, 3,059 unique
+staging rows (2,990 auto-matched, 69 unmatched), 2,825 offers and 3,151 history
+points. The 69 unmatched rows are 19 correctly rejected bundles, 39 no-candidate
+titles, 10 low-confidence suggestions and one fuzzy-title suggestion; many are
+out-of-scope products found on peripheral pages (UPS units, PlayStation games,
+electric scooters). Thresholds were not changed.
+
 ## Owner input still needed
 
-The broad CSV removes the need to type every title by hand, but it still needs an
-owner review pass: confirm canonical names, brands/models, categories,
-`specs_json`, and AR names; drop anything not sold/tracked by the project. Once
-approved, import it and measure the raw match rate again. No AI is used to
-invent SKUs, compatibility, or ranking; additions are explicit curated content,
-with AR/EN phrasing handled separately as copy only.
+The broad CSV removes the need to type every title by hand, but production still
+needs an owner review pass: confirm canonical names, brands/models, categories,
+`specs_json`, and AR names; drop anything not sold/tracked by the project. The
+local import above was for measurement only. No AI is used to invent SKUs,
+compatibility, or ranking; additions are explicit curated content, with AR/EN
+phrasing handled separately as copy only.

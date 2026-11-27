@@ -212,8 +212,9 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > Firebase verification passed against both the Auth emulator and the live
 > `tagme3a` project via the real verifier (`backend/M3.md`).
 > SKU-curation reporting, broad candidate-CSV generation and the reviewed-CSV
-> importer are in `backend/SKU_CURATION.md`; alert webhook wiring guidance is in
-> `backend/OPS_WEBHOOKS.md`.
+> importer are in `backend/SKU_CURATION.md`; a local full re-scrape after importing
+> the broad CSV reached 3,079/3,149 auto-matches (97.8%). Alert webhook wiring
+> guidance is in `backend/OPS_WEBHOOKS.md`.
 
 ### M4 — PC Builder
 
