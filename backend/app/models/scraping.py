@@ -125,6 +125,11 @@ class StagingListing(Base):
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    suggested_product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    suggestion_confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)
+    suggestion_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

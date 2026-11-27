@@ -24,6 +24,9 @@ class ReviewListing(BaseModel):
     match_status: MatchStatus
     match_confidence: Decimal | None
     product_id: int | None
+    suggested_product_id: int | None = None
+    suggestion_confidence: Decimal | None = None
+    suggestion_reason: str | None = None
     created_at: datetime
 
 

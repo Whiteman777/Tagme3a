@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import AsyncSessionLocal
 from app.core.logging import logger
 from app.models.catalog import Merchant, Offer, PriceHistory, Product, ProductCategory
+from app.services.matcher import ensure_product_embeddings
 from app.services.search import search_service
 
 MERCHANTS = [
@@ -195,6 +196,7 @@ async def seed(db: AsyncSession) -> None:
                     )
                 )
 
+    await ensure_product_embeddings(db)
     await db.commit()
     search_service.ensure_index()
     all_products = created_products or list((await db.scalars(select(Product))).all())

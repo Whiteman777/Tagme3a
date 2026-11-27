@@ -10,17 +10,25 @@ from sqlalchemy import select
 from app.api.deps import get_arq_pool
 from app.core.db import AsyncSession
 from app.main import app
-from app.models.catalog import Offer, Product
+from app.models.catalog import Offer, Product, ProductAlias
 from app.models.scraping import MatchStatus, StagingListing
 from app.services.ingestion import run_merchant
+from app.services.matcher import match_listing
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SIGMA_HTML = (FIXTURES / "sigma_listing.html").read_text(encoding="utf-8")
 
 
-async def test_review_queue_requires_admin(client: AsyncClient, seeded: None) -> None:
+async def test_review_queue_requires_reviewer_role(client: AsyncClient, seeded: None) -> None:
     response = await client.get("/api/v1/admin/review/listings")
     assert response.status_code == 403
+
+
+async def test_review_queue_allows_reviewer(
+    reviewer_client: AsyncClient, seeded: None
+) -> None:
+    response = await reviewer_client.get("/api/v1/admin/review/listings")
+    assert response.status_code == 200, response.text
 
 
 async def test_review_list_filters_by_status_and_merchant(
@@ -74,6 +82,35 @@ async def test_match_promotes_listing_and_publishes_offer(
     )
     assert offer is not None
     assert offer.price_egp == Decimal("8900.00")
+
+
+async def test_reviewer_match_learns_alias_for_future_scrapes(
+    reviewer_client: AsyncClient, db: AsyncSession, seeded: None
+) -> None:
+    unknown_html = SIGMA_HTML.replace("AMD Ryzen 5 7600", "Unknown Widget Pro")
+    await run_merchant(db, "sigma", html=unknown_html)
+    row = await db.scalar(
+        select(StagingListing).where(StagingListing.raw_title == "Unknown Widget Pro")
+    )
+    assert row is not None
+    product = await db.scalar(select(Product).where(Product.slug == "ryzen-5-7600"))
+    assert product is not None
+
+    response = await reviewer_client.post(
+        f"/api/v1/admin/review/listings/{row.id}/match",
+        json={"product_id": product.id},
+    )
+    assert response.status_code == 200, response.text
+    await db.refresh(row)
+    assert row.reviewed_by is not None
+
+    alias = await db.scalar(select(ProductAlias).where(ProductAlias.product_id == product.id))
+    assert alias is not None
+    assert alias.normalized == "unknown widget"
+
+    learned = await match_listing(db, "Unknown Widget Pro")
+    assert learned.status.value == "auto_matched"
+    assert learned.product is not None and learned.product.id == product.id
 
 
 async def test_reject_clears_product_match(

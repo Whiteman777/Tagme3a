@@ -60,6 +60,15 @@ async def get_current_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+async def get_current_reviewer(user: User = Depends(get_current_user)) -> User:
+    if user.role not in (UserRole.REVIEWER, UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Reviewer or administrator access required.",
+        )
+    return user
+
+
 async def get_arq_pool() -> AsyncGenerator[ArqRedis, None]:
     """Yield a short-lived arq pool for enqueueing on-demand jobs."""
     try:

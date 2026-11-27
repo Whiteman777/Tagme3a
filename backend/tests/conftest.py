@@ -84,6 +84,18 @@ async def admin_client(client: AsyncClient, db: AsyncSession, auth_uid: str) -> 
 
 
 @pytest.fixture
+async def reviewer_client(client: AsyncClient, db: AsyncSession, auth_uid: str) -> AsyncClient:
+    """Client whose Firebase identity maps to a reviewer user in Postgres."""
+    user = await db.scalar(select(User).where(User.firebase_uid == auth_uid))
+    if user is None:
+        db.add(User(firebase_uid=auth_uid, email="reviewer@example.com", role=UserRole.REVIEWER))
+    else:
+        user.role = UserRole.REVIEWER
+    await db.commit()
+    return client
+
+
+@pytest.fixture
 async def seeded(db: AsyncSession) -> None:
     from app.services.seed import seed
 

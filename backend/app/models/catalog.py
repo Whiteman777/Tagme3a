@@ -35,6 +35,30 @@ class ProductCategory(StrEnum):
     PERIPHERAL = "peripheral"
 
 
+class ProductAlias(Base):
+    """A curated or reviewer-learned title variant for a canonical product."""
+
+    __tablename__ = "product_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    alias: Mapped[str] = mapped_column(String(300), nullable=False)
+    normalized: Mapped[str] = mapped_column(String(300), index=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(24), default="manual", server_default="manual")
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("product_id", "normalized", name="uq_product_alias_product_normalized"),
+    )
+
+
 class Merchant(Base):
     __tablename__ = "merchants"
 

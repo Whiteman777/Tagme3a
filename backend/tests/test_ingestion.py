@@ -47,6 +47,20 @@ async def test_unmatched_listings_are_flagged_for_review(db: AsyncSession, seede
     assert rows[1].match_status == MatchStatus.AUTO_MATCHED
 
 
+async def test_rejected_match_survives_a_later_scrape(db: AsyncSession, seeded: None) -> None:
+    await run_merchant(db, "sigma", html=SIGMA_HTML)
+    row = await db.scalar(select(StagingListing).where(StagingListing.external_id == "sigma-1"))
+    assert row is not None
+    row.match_status = MatchStatus.REJECTED
+    row.product_id = None
+    await db.flush()
+
+    await run_merchant(db, "sigma", html=SIGMA_HTML.replace("8,900", "8,750"))
+    await db.refresh(row)
+    assert row.match_status == MatchStatus.REJECTED
+    assert row.product_id is None
+
+
 async def test_recompute_only_appends_history_on_change(db: AsyncSession, seeded: None) -> None:
     await run_merchant(db, "sigma", html=SIGMA_HTML)
     product = await db.scalar(select(Product).where(Product.slug == "ryzen-5-7600"))

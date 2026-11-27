@@ -1,4 +1,4 @@
-"""Admin review queue, scraper health and manual scrape triggering (M2)."""
+"""Reviewer/admin review queue, scraper health and manual scrape triggering."""
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_arq_pool, get_current_admin
+from app.api.deps import get_arq_pool, get_current_admin, get_current_reviewer
 from app.core.db import get_db
 from app.models.catalog import Merchant, Product
 from app.models.scraping import MatchStatus, RunStatus, ScraperRun, StagingListing
@@ -21,6 +21,7 @@ from app.schemas.scraping import (
     ScraperHealth,
 )
 from app.services.ingestion import recompute_offers
+from app.services.matcher import learn_alias
 
 router = APIRouter(prefix="/admin", tags=["admin", "review"])
 
@@ -41,6 +42,9 @@ def _to_item(row: StagingListing, merchant_key: str) -> ReviewListing:
         match_status=row.match_status,
         match_confidence=row.match_confidence,
         product_id=row.product_id,
+        suggested_product_id=row.suggested_product_id,
+        suggestion_confidence=row.suggestion_confidence,
+        suggestion_reason=row.suggestion_reason,
         created_at=row.created_at,
     )
 
@@ -56,7 +60,7 @@ async def list_review_listings(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    _reviewer: User = Depends(get_current_reviewer),
 ) -> ReviewPage:
     conditions = []
     if status_filter is not None:
@@ -85,7 +89,7 @@ async def match_listing(
     listing_id: int,
     data: ListingMatchRequest,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    reviewer: User = Depends(get_current_reviewer),
 ) -> ReviewListing:
     row = await db.get(StagingListing, listing_id)
     if row is None:
@@ -103,8 +107,14 @@ async def match_listing(
     row.category = product.category
     row.match_status = MatchStatus.MATCHED
     row.match_confidence = Decimal("1.0000")
-    row.reviewed_by = admin.id
+    row.suggested_product_id = None
+    row.suggestion_confidence = None
+    row.suggestion_reason = None
+    row.reviewed_by = reviewer.id
     row.reviewed_at = datetime.now(UTC)
+    await learn_alias(
+        db, product, row.normalized_name or row.raw_title, reviewed_by=reviewer.id
+    )
     await db.flush()
     await recompute_offers(db)
     return _to_item(row, await _merchant_key(db, row.merchant_id))
@@ -114,7 +124,7 @@ async def match_listing(
 async def reject_listing(
     listing_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    reviewer: User = Depends(get_current_reviewer),
 ) -> ReviewListing:
     row = await db.get(StagingListing, listing_id)
     if row is None:
@@ -122,7 +132,7 @@ async def reject_listing(
 
     row.match_status = MatchStatus.REJECTED
     row.product_id = None
-    row.reviewed_by = admin.id
+    row.reviewed_by = reviewer.id
     row.reviewed_at = datetime.now(UTC)
     await db.flush()
     await recompute_offers(db)

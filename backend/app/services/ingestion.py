@@ -2,7 +2,6 @@
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
 import httpx
 from sqlalchemy import select
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import logger
-from app.models.catalog import Merchant, Offer, PriceHistory, Product
+from app.models.catalog import Merchant, Offer, PriceHistory
 from app.models.scraping import (
     MatchStatus,
     ParseStatus,
@@ -19,29 +18,9 @@ from app.models.scraping import (
     ScraperRun,
     StagingListing,
 )
-from app.scrapers.base import FetchResult, ScrapedListing, slugify
+from app.scrapers.base import FetchResult
 from app.scrapers.registry import get_scraper
-
-
-async def _match_product(
-    db: AsyncSession, listing: ScrapedListing
-) -> tuple[Product | None, Decimal | None]:
-    """Deterministic M2 matching; fuzzy/pgvector matching arrives in M3."""
-    title = listing.title.casefold()
-
-    by_slug = await db.scalar(
-        select(Product).where(Product.slug == slugify(listing.title), Product.is_active.is_(True))
-    )
-    if by_slug is not None:
-        return by_slug, Decimal("0.99")
-
-    products = (await db.scalars(select(Product).where(Product.is_active.is_(True)))).all()
-    for product in products:
-        if product.model.casefold() in title and (
-            not listing.brand or product.brand.casefold() in title
-        ):
-            return product, Decimal("0.95")
-    return None, None
+from app.services.matcher import ensure_product_embeddings, match_listing
 
 
 def _finish_run(run: ScraperRun, started: datetime) -> None:
@@ -82,6 +61,7 @@ async def run_merchant(
         user_agents=tuple(scraper_type.user_agents or settings.SCRAPER_USER_AGENTS),
         client=client,
     )
+    await ensure_product_embeddings(db)
     if html is not None or url is not None:
         targets = [url or scraper_type.listings_url]
     else:
@@ -160,7 +140,12 @@ async def run_merchant(
 
             matched = 0
             for listing in listings:
-                product, confidence = await _match_product(db, listing)
+                result = await match_listing(
+                    db,
+                    listing.title,
+                    brand=listing.brand,
+                    model=listing.model,
+                )
                 staging = await db.scalar(
                     select(StagingListing).where(
                         StagingListing.merchant_id == merchant.id,
@@ -183,16 +168,30 @@ async def run_merchant(
                 staging.in_stock = listing.in_stock
                 staging.url = listing.url
 
-                if product is not None:
-                    staging.product_id = product.id
-                    staging.category = product.category
+                manually_reviewed = staging.match_status in (
+                    MatchStatus.MATCHED,
+                    MatchStatus.REJECTED,
+                )
+                if manually_reviewed:
+                    pass  # A reviewer's decision survives later scrapes.
+                elif result.product is not None:
+                    staging.product_id = result.product.id
+                    staging.category = result.product.category
                     staging.match_status = MatchStatus.AUTO_MATCHED
-                    staging.match_confidence = confidence
+                    staging.match_confidence = result.confidence
+                    staging.suggested_product_id = None
+                    staging.suggestion_confidence = None
+                    staging.suggestion_reason = None
                     matched += 1
-                elif staging.match_status not in (MatchStatus.MATCHED, MatchStatus.AUTO_MATCHED):
+                else:
                     staging.match_status = MatchStatus.UNMATCHED
                     staging.match_confidence = None
                     staging.product_id = None
+                    staging.suggested_product_id = (
+                        result.suggestion.id if result.suggestion is not None else None
+                    )
+                    staging.suggestion_confidence = result.suggestion_confidence
+                    staging.suggestion_reason = result.reason
 
             snapshot.parse_status = ParseStatus.PARSED
             snapshot.parsed_at = datetime.now(UTC)

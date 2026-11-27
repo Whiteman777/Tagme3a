@@ -1,5 +1,6 @@
 """Application settings loaded from environment variables."""
 
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic import Field, PostgresDsn, RedisDsn
@@ -51,6 +52,11 @@ class Settings(BaseSettings):
     SCRAPE_CRON_HOUR: int = 2  # UTC (≈05:00 Cairo in summer, 04:00 in winter)
     SCRAPE_CRON_MINUTE: int = 0
     RECOMPUTE_CRON_MINUTE: int = 30
+
+    # M3 matching (deterministic; no AI decisions)
+    MATCH_AUTO_MIN: Decimal = Decimal("0.88")
+    MATCH_REVIEW_MIN: Decimal = Decimal("0.72")
+    MATCH_VECTOR_DIMS: int = 256
 
     # CORS
     CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["*"])
