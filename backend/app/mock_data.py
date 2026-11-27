@@ -30,7 +30,7 @@ MERCHANTS: list[MerchantRead] = [
         key="sigma",
         name="Sigma Computer",
         name_ar="سيجما كمبيوتر",
-        base_url="https://sigma.com.eg",
+        base_url="https://sigma-computer.com",
         is_active=True,
     ),
     MerchantRead(

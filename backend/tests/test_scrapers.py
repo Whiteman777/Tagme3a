@@ -38,6 +38,33 @@ def test_sigma_fixture_parses_two_listings() -> None:
     assert listings[1].in_stock is False
 
 
+def test_sigma_real_fixture_parses_server_rendered_cards() -> None:
+    html = (FIXTURES / "sigma_listing_real.html").read_text(encoding="utf-8")
+    scraper = SigmaScraper(delay=0)
+    listings = scraper.parse(html, url=scraper.listings_url)
+
+    assert len(listings) == 2
+    assert listings[0].external_id.startswith("lenovo-ideapad-slim-3-15irh10")
+    assert listings[0].price_egp == Decimal("41999")
+    assert listings[0].in_stock is True
+    assert listings[0].url.startswith("https://sigma-computer.com/en/item?id=")
+    assert listings[1].price_egp == Decimal("63999")
+    assert listings[1].in_stock is True
+
+
+def test_sigma_real_fixture_detects_out_of_stock_badge() -> None:
+    html = (FIXTURES / "sigma_listing_oos_real.html").read_text(encoding="utf-8")
+    scraper = SigmaScraper(delay=0)
+    listings = scraper.parse(html, url=scraper.listings_url)
+
+    assert len(listings) == 2
+    assert listings[0].external_id.startswith("dell-optiplex-7090-tower")
+    assert listings[0].price_egp == Decimal("32000")
+    assert listings[0].in_stock is False
+    assert listings[0].raw["badges"] == "Out Of Stockasd"
+    assert listings[1].in_stock is True
+
+
 def test_compumarts_fixture_parses_two_listings() -> None:
     html = (FIXTURES / "compumarts_listing.html").read_text(encoding="utf-8")
     listings = CompumartsScraper(delay=0).parse(html, url="https://compumarts.com/components/cpu")
@@ -60,12 +87,12 @@ def test_registry_maps_merchant_adapter_keys() -> None:
 async def test_robots_disallow_blocks_fetch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/robots.txt":
-            return httpx.Response(200, text="User-agent: *\nDisallow: /cpu\n")
+            return httpx.Response(200, text="User-agent: *\nDisallow: /en/category/cpu\n")
         return httpx.Response(200, text="<html></html>")
 
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(handler), base_url="https://sigma.com.eg"
+        transport=httpx.MockTransport(handler), base_url="https://sigma-computer.com"
     ) as client:
         scraper = SigmaScraper(delay=0, max_retries=0, client=client)
         with pytest.raises(PermissionError, match="robots.txt disallows"):
-            await scraper.scrape("https://sigma.com.eg/cpu")
+            await scraper.scrape("https://sigma-computer.com/en/category/cpu")

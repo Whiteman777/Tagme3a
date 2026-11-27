@@ -185,7 +185,8 @@ Laptop recommender · Alerts · Auth · Profile/Saved builds.
 > arq daily cron (02:00 UTC scrape, 02:30 UTC ghost recompute), admin review queue,
 > scraper health and manual enqueue are in place. Live selectors still need tuning
 > against real merchant HTML; reviewer-role enforcement and fuzzy/pgvector matching
-> remain in M3.
+> remain in M3. Sigma's selectors are now tuned against real server-rendered
+> category HTML (`backend/M2.md`); Compumarts still needs real-page verification.
 
 ### M3 — Normalization & Matcher
 
