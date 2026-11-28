@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "938110481572",
+    "project_id": "tagme3a",
+    "storage_bucket": "tagme3a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:938110481572:android:d4125ac245c9c118b32231",
+        "android_client_info": {
+          "package_name": "com.example.tagme3a"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "938110481572-a5ha2bckr7of0oi4b4kjgmadq27lg785.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCK0UpBGzwC9u-TciXeTTnUgHqrnsRcuw8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "938110481572-a5ha2bckr7of0oi4b4kjgmadq27lg785.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -10,6 +10,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/currency.dart';
 import '../../../alerts/presentation/bloc/alerts_bloc.dart';
+import '../../../auth/domain/entities/app_user.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../navigation/presentation/cubit/navigation_cubit.dart';
 
 class AccountPage extends StatelessWidget {
@@ -18,6 +21,7 @@ class AccountPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alertsState = context.watch<AlertsBloc>().state;
+    final user = context.watch<AuthBloc>().state.user;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -25,7 +29,13 @@ class AccountPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
           children: [
-            _ProfileHeader(alertsCount: alertsState.enabledCount),
+            _ProfileHeader(alertsCount: alertsState.enabledCount, user: user),
+            if (user == null) ...[
+              const SizedBox(height: 12),
+              _GuestSignInCard(
+                onSignIn: () => Navigator.of(context).push(AppRoutes.auth()),
+              ),
+            ],
             const SizedBox(height: 16),
             _SavedBuildCard(
               onOpen: () => context.read<NavigationCubit>().select(
@@ -119,12 +129,18 @@ class AccountPage extends StatelessWidget {
                   _MenuTile(
                     icon: Icons.person_outline_rounded,
                     title: 'بيانات الحساب',
-                    subtitle: 'الاسم، البريد، رقم الموبايل',
-                    onTap: () => AppSnack.show(
-                      context,
-                      'تعديل البيانات متاح في النسخة الكاملة',
-                      icon: Icons.person_rounded,
-                    ),
+                    subtitle: user?.email ?? 'الاسم، البريد، رقم الموبايل',
+                    onTap: () {
+                      if (user == null) {
+                        Navigator.of(context).push(AppRoutes.auth());
+                        return;
+                      }
+                      AppSnack.show(
+                        context,
+                        'تعديل البيانات متاح في النسخة الكاملة',
+                        icon: Icons.person_rounded,
+                      );
+                    },
                   ),
                   const Divider(height: 1, indent: 52, endIndent: 14),
                   _MenuTile(
@@ -242,22 +258,21 @@ class AccountPage extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: () => AppSnack.show(
-                context,
-                'تسجيل الخروج غير مفعّل في النسخة التجريبية',
-                icon: Icons.logout_rounded,
-              ),
-              icon: const Icon(Icons.logout_rounded, size: 18),
-              label: const Text('تسجيل الخروج'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.danger,
-                side: BorderSide(
-                  color: AppColors.danger.withValues(alpha: 0.25),
+            if (user != null) ...[
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                key: const Key('account-sign-out'),
+                onPressed: () => _confirmSignOut(context),
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('تسجيل الخروج'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                  side: BorderSide(
+                    color: AppColors.danger.withValues(alpha: 0.25),
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 20),
             const Center(
               child: BrandWordmark(
@@ -284,15 +299,75 @@ class AccountPage extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          'تسجيل الخروج؟',
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink,
+          ),
+        ),
+        content: const Text(
+          'هتقدر تسجل دخولك تاني في أي وقت.',
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontSize: 12.5,
+            height: 1.7,
+            fontWeight: FontWeight.w500,
+            color: AppColors.muted,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              minimumSize: const Size(0, 42),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      context.read<AuthBloc>().add(const AuthSignOutRequested());
+    }
+  }
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.alertsCount});
+  const _ProfileHeader({required this.alertsCount, required this.user});
 
   final int alertsCount;
+  final AppUser? user;
 
   @override
   Widget build(BuildContext context) {
+    final photoUrl = user?.photoUrl;
+    final providerLabel = user == null
+        ? 'وضع الزائر'
+        : user!.isGoogle
+        ? 'حساب Google'
+        : 'حساب بالبريد';
+    final providerIcon = user == null
+        ? Icons.person_outline_rounded
+        : user!.isGoogle
+        ? Icons.public_rounded
+        : Icons.verified_rounded;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -345,6 +420,7 @@ class _ProfileHeader extends StatelessWidget {
                   Container(
                     width: 66,
                     height: 66,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.16),
                       shape: BoxShape.circle,
@@ -353,30 +429,43 @@ class _ProfileHeader extends StatelessWidget {
                         width: 2,
                       ),
                     ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      size: 34,
-                      color: Colors.white,
-                    ),
+                    child: photoUrl == null
+                        ? const Icon(
+                            Icons.person_rounded,
+                            size: 34,
+                            color: Colors.white,
+                          )
+                        : Image.network(
+                            photoUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.person_rounded,
+                                size: 34,
+                                color: Colors.white,
+                              );
+                            },
+                          ),
                   ),
-                  PositionedDirectional(
-                    bottom: -1,
-                    end: -1,
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        size: 12,
-                        color: AppColors.ink,
+                  if (user != null)
+                    PositionedDirectional(
+                      bottom: -1,
+                      end: -1,
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: AppColors.ink,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(width: 13),
@@ -384,9 +473,11 @@ class _ProfileHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'مصطفى محمود',
-                      style: TextStyle(
+                    Text(
+                      user?.name ?? 'زائر',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -395,7 +486,9 @@ class _ProfileHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'mostafa@tagme3a.demo',
+                      user?.email ?? 'سجّل دخولك عشان تحفظ شغلك',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontSize: 9.5,
@@ -405,8 +498,8 @@ class _ProfileHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     TagPill(
-                      label: 'عضو موثّق منذ 2024',
-                      icon: Icons.verified_rounded,
+                      label: providerLabel,
+                      icon: providerIcon,
                       background: Colors.white.withValues(alpha: 0.14),
                       foreground: AppColors.accent,
                       fontSize: 8,
@@ -429,6 +522,81 @@ class _ProfileHeader extends StatelessWidget {
               _HeaderDivider(),
               const _HeaderStat(value: '7', label: 'مفضلة'),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestSignInCard extends StatelessWidget {
+  const _GuestSignInCard({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.login_rounded,
+                  size: 19,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'احفظ شغلك على حسابك',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'سجّل دخولك عشان تجميعاتك وتنبيهاتك تفضل معاك.',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 9,
+                        height: 1.6,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SoftButton(
+            label: 'تسجيل الدخول',
+            icon: Icons.login_rounded,
+            onPressed: onSignIn,
           ),
         ],
       ),
@@ -558,22 +726,35 @@ class _SavedBuildCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              TagPill(
-                label: 'i7-14700K',
-                background: AppColors.background,
-                foreground: AppColors.inkSoft,
-                fontSize: 8,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              Expanded(
+                child: Wrap(
+                  spacing: 5,
+                  runSpacing: 4,
+                  children: [
+                    TagPill(
+                      label: 'i7-14700K',
+                      background: AppColors.background,
+                      foreground: AppColors.inkSoft,
+                      fontSize: 8,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                    ),
+                    TagPill(
+                      label: 'RTX 4070 Ti Super',
+                      background: AppColors.background,
+                      foreground: AppColors.inkSoft,
+                      fontSize: 8,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 5),
-              TagPill(
-                label: 'RTX 4070 Ti Super',
-                background: AppColors.background,
-                foreground: AppColors.inkSoft,
-                fontSize: 8,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              ),
-              const Spacer(),
+              const SizedBox(width: 6),
               GestureDetector(
                 onTap: onOpen,
                 child: Row(

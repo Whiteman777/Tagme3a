@@ -4,11 +4,15 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/di/app_dependencies.dart';
 import '../core/presentation/app_scroll_behavior.dart';
+import '../core/storage/app_preferences.dart';
 import '../core/theme/app_theme.dart';
 import '../features/alerts/domain/repositories/alerts_repository.dart';
 import '../features/alerts/domain/usecases/get_price_alerts.dart';
 import '../features/alerts/presentation/bloc/alerts_bloc.dart';
 import '../features/alerts/presentation/bloc/alerts_event.dart';
+import '../features/auth/domain/repositories/auth_repository.dart';
+import '../features/auth/presentation/bloc/auth_bloc.dart';
+import '../features/auth/presentation/bloc/auth_event.dart';
 import '../features/builder/domain/repositories/builder_repository.dart';
 import '../features/builder/domain/usecases/get_builder_data.dart';
 import '../features/builder/presentation/bloc/builder_bloc.dart';
@@ -27,7 +31,7 @@ import '../features/laptops/presentation/bloc/laptops_bloc.dart';
 import '../features/laptops/presentation/bloc/laptops_event.dart';
 import '../features/navigation/presentation/cubit/navigation_cubit.dart';
 import '../features/product/domain/repositories/product_repository.dart';
-import '../features/splash/presentation/pages/splash_page.dart';
+import 'app_gate.dart';
 
 class Tagme3aApp extends StatelessWidget {
   const Tagme3aApp({super.key, required this.dependencies});
@@ -55,6 +59,12 @@ class Tagme3aApp extends StatelessWidget {
         ),
         RepositoryProvider<AlertsRepository>.value(
           value: dependencies.alertsRepository,
+        ),
+        RepositoryProvider<AuthRepository>.value(
+          value: dependencies.authRepository,
+        ),
+        RepositoryProvider<AppPreferences>.value(
+          value: dependencies.preferences,
         ),
       ],
       child: MultiBlocProvider(
@@ -92,15 +102,22 @@ class Tagme3aApp extends StatelessWidget {
               getPriceAlerts: GetPriceAlerts(context.read<AlertsRepository>()),
             )..add(const AlertsStarted()),
           ),
+          BlocProvider(
+            create: (context) =>
+                AuthBloc(context.read<AuthRepository>())
+                  ..add(const AuthStarted()),
+          ),
         ],
-        child: const _Tagme3aView(),
+        child: _Tagme3aView(preferences: dependencies.preferences),
       ),
     );
   }
 }
 
 class _Tagme3aView extends StatelessWidget {
-  const _Tagme3aView();
+  const _Tagme3aView({required this.preferences});
+
+  final AppPreferences preferences;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +133,7 @@ class _Tagme3aView extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const SplashPage(),
+      home: AppGate(preferences: preferences),
     );
   }
 }
